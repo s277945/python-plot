@@ -23,27 +23,14 @@ def getIndex(li,target):
     return -1
 
 data = []
-# tracks = [] 
-# objects = [] 
-# groups = [] 
-# status = [] 
-# latency = [] 
-# highLatency = [] 
-# lowLatency = [] 
-# oldPacket = [] 
-# slowPacket = [] 
-names = []
 track_ids = []
 tracks = []
-names_tracks = []
-color = []
-color_tracks = []
 f = open('test.txt','r') 
 for row in f: 
     row = row.split(';') 
     if(row[0].isnumeric()) :        
         # if row has track id and latency value
-        if(row[4].isnumeric()) : 
+        if(4 < len(row) and row[4].isnumeric()) : 
             # add row data (received packet data) to general data array
             data.append(rowData(row[0] + "-" + int(row[2]), int(row[4]), (0.1, 0.1, 0.8, 1)))        
             # add track to track array if not present and the received packet data to the individual track data array
@@ -69,22 +56,19 @@ for row in f:
                 index2 = getIndex(tracks[track_ids.index(row[0])], row_name)
                 if( index2>=0 ) : 
                     tracks[track_ids.index(row[0])][index2].setColor((0.6, 0.3, 0.1, 0.7))
-        
-    objects.append(int(row[1])) 
-    status.append(row[3]) 
-    latency.append(int(row[4])) 
-    highLatency.append(int(row[4]))
-    lowLatency.append(int(row[4]))
-    oldPacket.append(int(row[4]))
-    slowPacket.append(int(row[4]))
   
-
-fig, axs = plt.subplots(2)
-plt.bar( data.map(a.foo, a), marks, color = 'g', label = 'File Data') 
-  
-plt.xlabel('Student Names', fontsize = 12) 
-plt.ylabel('Marks', fontsize = 12) 
-  
-plt.title('Students Marks', fontsize = 20) 
+print(len(tracks) + 1)
+fig, axs = plt.subplots(len(tracks) + 1)
+fig.suptitle('moq-js latency test', fontsize = 20)
+axs[0].bar(map(lambda node: node.name, data), map(lambda node: node.latency, data), color = map(lambda node: node.color, data))
+axs[0].set_title("All packets")
+axs[0].xlabel('Object sequence number', fontsize = 12)
+axs[0].ylabel('Latency(ms)', fontsize = 12)
+for pos, track in enumerate(tracks) :     
+    axs[id + 1].bar(map(lambda node: node.name, tracks[pos]), map(lambda node: node.latency, data), color = map(lambda node: node.color, data))    
+    axs[id + 1].set_title('Track' + track_ids[[pos]])    
+    axs[id + 1].xlabel('Object sequence number', fontsize = 12)
+    axs[id + 1].ylabel('Latency(ms)', fontsize = 12)
+ 
 plt.legend() 
 plt.show() 

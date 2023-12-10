@@ -28,6 +28,7 @@ class rowData :
         self.receiver_ts = receiver_ts
         if (self.sender_ts is not None and receiver_ts is not None and receiver_ts > self.sender_ts) : 
             self.latency = receiver_ts - self.sender_ts
+            # print(self.latency)
     def getLatency(self):
         return self.latency
     def getColor(self):
@@ -82,19 +83,22 @@ for row in f:
             if name in data : 
                 data[name].setColor((0.6, 0.2, 0.2, 1)) 
                 tracks[row[0]][row[2]].setColor((0.6, 0.2, 0.2, 1))
-  
+
+# print(data)
 print(len(tracks))
 print("Tracks found: " + str(list(tracks.keys())))
 fig, axs = plt.subplots(len(tracks) + 1)
 fig.suptitle('moq-js latency test', fontsize = 20)
 ticks0 = []
-for key, elem in data.items() : 
+for key, elem in data.items() :     
+    # print(elem.name, elem.latency, elem.color)
     axs[0].bar(elem.name, elem.latency, color = elem.color)
     # if(i % 50 == 0) :
     #     ticks0.append(elem)
 axs[0].set_title("All packets")
 axs[0].set_ylabel('Latency(ms)', fontsize = 12)
-axs[0].set_xticks(axs[0].get_xticks()[::50])
+num = round(len(axs[0].get_xticks()) / 10)
+axs[0].set_xticks(axs[0].get_xticks()[::num])
 
 for index, key in enumerate(tracks) :    
     for elem in tracks[key].values() : 
@@ -104,7 +108,8 @@ for index, key in enumerate(tracks) :
         axs[index+1].set_ylabel('Video', fontsize = 12)
     else :
         axs[index+1].set_ylabel('Audio', fontsize = 12)
-        axs[index+1].set_xticks(axs[index].get_xticks()[::50])
+        num = round(len(axs[index+1].get_xticks()) / 10)
+        axs[index+1].set_xticks(axs[index+1].get_xticks()[::num])
  
 props = {"rotation" : 45}
 for ax in axs : 

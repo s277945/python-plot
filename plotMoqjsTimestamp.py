@@ -3,11 +3,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 class rowData :
-    def __init__(self, name, latency=None, color=None, sender_ts=None, receiver_ts=None):
+    def __init__(self, name, latency=None, color=None, sender_ts=None, receiver_ts=None, sender_jitter=None, receiver_jitter=None):
         self.name = name
         self.color = color
         self.sender_ts = sender_ts
         self.receiver_ts = receiver_ts
+        self.sender_jitter = sender_jitter
+        self.receiver_jitter = receiver_jitter
         if (sender_ts is not None and receiver_ts is not None and receiver_ts > sender_ts) : 
             self.latency = receiver_ts - sender_ts
         elif (latency is not None) : 
@@ -22,13 +24,16 @@ class rowData :
         self.sender_ts = sender_ts
         if (sender_ts is not None and self.receiver_ts is not None and self.receiver_ts > sender_ts) : 
             self.latency = self.receiver_ts - sender_ts
+    def setSenderJitter(self, sender_jitter):
+        self.sender_jitter = sender_jitter
     def getReceiverTS(self):
         return self.receiver_ts
     def setReceiverTS(self, receiver_ts):
         self.receiver_ts = receiver_ts
         if (self.sender_ts is not None and receiver_ts is not None and receiver_ts > self.sender_ts) : 
             self.latency = receiver_ts - self.sender_ts
-            # print(self.latency)
+    def setReceiverJitter(self, receiver_jitter):
+        self.receiver_jitter = receiver_jitter
     def getLatency(self):
         return self.latency
     def getColor(self):
@@ -63,13 +68,19 @@ for row in f:
                 else :
                     data[name] = rowData(row[0] + "-" + row[2], sender_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))
                     tracks[row[0]][row[2]] = rowData(row[2], sender_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))
+                if(5 < len(row) and row[5].isnumeric()) :
+                    data[name].setSenderJitter(int(row[5]))
+                    tracks[row[0]][row[2]].setSenderJitter(int(row[5]))
             elif(row[3] == 'received') :
                 if(name in data) :
                     data[name].setReceiverTS(int(row[4]))
                     tracks[row[0]][row[2]].setReceiverTS(int(row[4]))
                 else :
                     data[name] = rowData(row[0] + "-" + row[2], receiver_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))
-                    tracks[row[0]][row[2]] = rowData(row[2], receiver_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))
+                    tracks[row[0]][row[2]] = rowData(row[2], receiver_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))                
+                if(5 < len(row) and row[5].isnumeric()) :
+                    data[name].seReceiverJitter(int(row[5]))
+                    tracks[row[0]][row[2]].setReceiverJitter(int(row[5]))
             if name in data and int(data[name].getLatency()) > 35  :
                 data[name].setColor((0.8, 0.1, 0.1, 1))
                 tracks[row[0]][row[2]].setColor((0.8, 0.1, 0.1, 1))
@@ -87,29 +98,31 @@ for row in f:
 # print(data)
 print(len(tracks))
 print("Tracks found: " + str(list(tracks.keys())))
-fig, axs = plt.subplots(len(tracks) + 1)
+fig, axs = plt.subplots(len(tracks)*2 + 1)
 fig.suptitle('moq-js latency test', fontsize = 20)
 ticks0 = []
 for key, elem in data.items() :     
-    # print(elem.name, elem.latency, elem.color)
     axs[0].bar(elem.name, elem.latency, color = elem.color)
-    # if(i % 50 == 0) :
-    #     ticks0.append(elem)
 axs[0].set_title("All packets")
-axs[0].set_ylabel('Latency(ms)', fontsize = 12)
+axs[0].set_ylabel('Latency\n(ms)', fontsize = 12)
 num = round(len(axs[0].get_xticks()) / 10)
 axs[0].set_xticks(axs[0].get_xticks()[::num])
 
 for index, key in enumerate(tracks) :    
     for elem in tracks[key].values() : 
         axs[index+1].bar(elem.name, elem.latency, color = elem.color)
+        axs[index + len(tracks) + 1].bar(elem.name, elem.sender_jitter, color = elem.color)
     if(index + 1 == len(tracks))  :
-        axs[index+1].set_xlabel('Object sequence number', fontsize = 12)
-        axs[index+1].set_ylabel('Video', fontsize = 12)
+        axs[index + len(tracks) + 1].set_xlabel('Object sequence number', fontsize = 12)
+        axs[index+1].set_ylabel('Video\nLatency', fontsize = 12)
+        axs[index + len(tracks) + 1].set_ylabel('Video\nJitter', fontsize = 12)
     else :
-        axs[index+1].set_ylabel('Audio', fontsize = 12)
+        axs[index+1].set_ylabel('Audio\nLatency', fontsize = 12)
         num = round(len(axs[index+1].get_xticks()) / 10)
-        axs[index+1].set_xticks(axs[index+1].get_xticks()[::num])
+        axs[index+1].set_xticks(axs[index+1].get_xticks()[::num])        
+        axs[index + len(tracks) + 1].set_ylabel('Audio\nJitter', fontsize = 12)
+        num = round(len(axs[index + len(tracks) + 1].get_xticks()) / 10)
+        axs[index + len(tracks) + 1].set_xticks(axs[index + len(tracks) + 1].get_xticks()[::num])
  
 props = {"rotation" : 45}
 for ax in axs : 

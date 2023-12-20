@@ -50,7 +50,7 @@ def getIndex(li,target):
 data = {}
 tracks = {}
 names = {}
-f = open('log_2023-12-20_23.57.59.txt','r') 
+f = open('log_2023-12-20_23.57.9.txt','r') 
 for row in f: 
     row = row.strip('\n').split(';') 
     # print(row)
@@ -105,21 +105,25 @@ print("Tracks found: " + str(len(tracks)))
 print(names)
     
 if len(tracks) == 1 :
-    fig, ax = plt.subplots(1)
+    fig, axs = plt.subplots(2)
     fig.suptitle('moq-js latency test', fontsize = 20)
     ticks0 = []
     
     for index, key in enumerate(tracks) :    
         for elem in tracks[key].values() :
-            ax.bar(elem.name, elem.latency, color = elem.color)
-    ax.set_title("All packets")
-    ax.set_ylabel(names[key] + ' latency\n(ms)', fontsize = 12)
-    num = round(len(ax.get_xticks()) / 10)
+            axs[0].bar(elem.name, elem.latency, color = elem.color)
+            axs[1].bar(elem.name, elem.sender_jitter, color = elem.color)
+    axs[0].set_title("All packets")
+    axs[0].set_ylabel(names[key] + ' latency\n(ms)', fontsize = 12)
+    axs[1].set_ylabel(names[key] + ' jitter\n(ms)', fontsize = 12)
+    num = round(len(axs[0].get_xticks()) / 10)
     if num == 0 :
         num = 1
-    ax.set_xticks(ax.get_xticks()[::num])    
+    axs[0].set_xticks(axs[0].get_xticks()[::num])    
+    axs[1].set_xticks(axs[1].get_xticks()[::num])
     props = {"rotation" : 45}
-    plt.setp(ax.get_xticklabels(), **props)
+    for ax in axs : 
+        plt.setp(ax.get_xticklabels(), **props)
     
 else :
     fig, axs = plt.subplots(len(tracks)*2 + 1)

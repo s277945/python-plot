@@ -49,7 +49,7 @@ def getIndex(li,target):
 
 data = {}
 tracks = {}
-f = open('test.txt','r') 
+f = open('log_2023-12-20_19.12.21.txt','r') 
 for row in f: 
     row = row.strip('\n').split(';') 
     # print(row)
@@ -96,36 +96,53 @@ for row in f:
                 tracks[row[0]][row[2]].setColor((0.6, 0.2, 0.2, 1))
 
 # print(data)
-print(len(tracks))
-print("Tracks found: " + str(list(tracks.keys())))
-fig, axs = plt.subplots(len(tracks)*2 + 1)
-fig.suptitle('moq-js latency test', fontsize = 20)
-ticks0 = []
-for key, elem in data.items() :     
-    axs[0].bar(elem.name, elem.latency, color = elem.color)
-axs[0].set_title("All packets")
-axs[0].set_ylabel('Latency\n(ms)', fontsize = 12)
-num = round(len(axs[0].get_xticks()) / 10)
-axs[0].set_xticks(axs[0].get_xticks()[::num])
-
-for index, key in enumerate(tracks) :    
-    for elem in tracks[key].values() : 
-        axs[index+1].bar(elem.name, elem.latency, color = elem.color)
-        axs[index + len(tracks) + 1].bar(elem.name, elem.sender_jitter, color = elem.color)
-    if(index + 1 == len(tracks))  :
-        axs[index + len(tracks) + 1].set_xlabel('Object sequence number', fontsize = 12)
-        axs[index+1].set_ylabel('Video\nLatency', fontsize = 12)
-        axs[index + len(tracks) + 1].set_ylabel('Video\nJitter', fontsize = 12)
-    else :
-        axs[index+1].set_ylabel('Audio\nLatency', fontsize = 12)
-        num = round(len(axs[index+1].get_xticks()) / 10)
-        axs[index+1].set_xticks(axs[index+1].get_xticks()[::num])        
-        axs[index + len(tracks) + 1].set_ylabel('Audio\nJitter', fontsize = 12)
-        num = round(len(axs[index + len(tracks) + 1].get_xticks()) / 10)
-        axs[index + len(tracks) + 1].set_xticks(axs[index + len(tracks) + 1].get_xticks()[::num])
- 
-props = {"rotation" : 45}
-for ax in axs : 
+print("Tracks found: " + str(len(tracks)))
+    
+if len(tracks) == 1 :
+    fig, ax = plt.subplots(1)
+    fig.suptitle('moq-js latency test', fontsize = 20)
+    ticks0 = []
+    for key, elem in data.items() :     
+        ax.bar(elem.name, elem.latency, color = elem.color)
+    ax.set_title("All packets")
+    ax.set_ylabel('Latency\n(ms)', fontsize = 12)
+    num = round(len(ax.get_xticks()) / 10)
+    ax.set_xticks(ax.get_xticks()[::num])    
+    props = {"rotation" : 45}
     plt.setp(ax.get_xticklabels(), **props)
+    
+else :
+    fig, axs = plt.subplots(len(tracks)*2 + 1)
+    fig.suptitle('moq-js latency test', fontsize = 20)
+    ticks0 = []
+    for key, elem in data.items() :     
+        axs[0].bar(elem.name, elem.latency, color = elem.color)
+        axs[0].set_title("All packets")
+        axs[0].set_ylabel('Latency\n(ms)', fontsize = 12)
+        num = round(len(axs[0].get_xticks()) / 10)
+        if num == 0 : 
+            num = 1
+        axs[0].set_xticks(axs[0].get_xticks()[::num])
+
+    for index, key in enumerate(tracks) :    
+        for elem in tracks[key].values() : 
+            axs[index+1].bar(elem.name, elem.latency, color = elem.color)
+            axs[index + len(tracks) + 1].bar(elem.name, elem.sender_jitter, color = elem.color)
+        if(index + 1 == len(tracks))  :
+            axs[index + len(tracks) + 1].set_xlabel('Object sequence number', fontsize = 12)
+            axs[index+1].set_ylabel('Video\nLatency', fontsize = 12)
+            axs[index + len(tracks) + 1].set_ylabel('Video\nJitter', fontsize = 12)
+        else :
+            axs[index+1].set_ylabel('Audio\nLatency', fontsize = 12)
+            num = round(len(axs[index+1].get_xticks()) / 10)
+            axs[index+1].set_xticks(axs[index+1].get_xticks()[::num])        
+            axs[index + len(tracks) + 1].set_ylabel('Audio\nJitter', fontsize = 12)
+            num = round(len(axs[index + len(tracks) + 1].get_xticks()) / 10)
+            axs[index + len(tracks) + 1].set_xticks(axs[index + len(tracks) + 1].get_xticks()[::num])
+    
+    props = {"rotation" : 45}
+    for ax in axs : 
+        plt.setp(ax.get_xticklabels(), **props)
+        
 plt.legend() 
 plt.show() 

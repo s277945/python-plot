@@ -49,7 +49,7 @@ def getIndex(li,target):
 
 data = {}
 tracks = {}
-f = open('log_2023-12-20_19.12.21.txt','r') 
+f = open('log_2023-12-20_18.44.11.txt','r') 
 for row in f: 
     row = row.strip('\n').split(';') 
     # print(row)
@@ -102,8 +102,10 @@ if len(tracks) == 1 :
     fig, ax = plt.subplots(1)
     fig.suptitle('moq-js latency test', fontsize = 20)
     ticks0 = []
-    for key, elem in data.items() :     
-        ax.bar(elem.name, elem.latency, color = elem.color)
+    
+    for index, key in enumerate(tracks) :    
+        for elem in tracks[key].values() :
+            ax.bar(elem.name, elem.latency, color = elem.color)
     ax.set_title("All packets")
     ax.set_ylabel('Latency\n(ms)', fontsize = 12)
     num = round(len(ax.get_xticks()) / 10)

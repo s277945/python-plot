@@ -49,7 +49,8 @@ def getIndex(li,target):
 
 data = {}
 tracks = {}
-f = open('log_2023-12-20_18.44.11.txt','r') 
+names = {}
+f = open('log_2023-12-20_23.57.59.txt','r') 
 for row in f: 
     row = row.strip('\n').split(';') 
     # print(row)
@@ -94,9 +95,14 @@ for row in f:
             if name in data : 
                 data[name].setColor((0.6, 0.2, 0.2, 1)) 
                 tracks[row[0]][row[2]].setColor((0.6, 0.2, 0.2, 1))
+        elif(row[3] == 'AUDIO') :
+            names[row[0]] = 'Audio'
+        elif(row[3] == 'VIDEO') :
+            names[row[0]] = 'Video'
 
 # print(data)
 print("Tracks found: " + str(len(tracks)))
+print(names)
     
 if len(tracks) == 1 :
     fig, ax = plt.subplots(1)
@@ -107,8 +113,10 @@ if len(tracks) == 1 :
         for elem in tracks[key].values() :
             ax.bar(elem.name, elem.latency, color = elem.color)
     ax.set_title("All packets")
-    ax.set_ylabel('Latency\n(ms)', fontsize = 12)
+    ax.set_ylabel(names[key] + ' latency\n(ms)', fontsize = 12)
     num = round(len(ax.get_xticks()) / 10)
+    if num == 0 :
+        num = 1
     ax.set_xticks(ax.get_xticks()[::num])    
     props = {"rotation" : 45}
     plt.setp(ax.get_xticklabels(), **props)
@@ -126,20 +134,24 @@ else :
             num = 1
         axs[0].set_xticks(axs[0].get_xticks()[::num])
 
-    for index, key in enumerate(tracks) :    
+    for index, key in enumerate(tracks) : 
         for elem in tracks[key].values() : 
             axs[index+1].bar(elem.name, elem.latency, color = elem.color)
             axs[index + len(tracks) + 1].bar(elem.name, elem.sender_jitter, color = elem.color)
         if(index + 1 == len(tracks))  :
             axs[index + len(tracks) + 1].set_xlabel('Object sequence number', fontsize = 12)
-            axs[index+1].set_ylabel('Video\nLatency', fontsize = 12)
-            axs[index + len(tracks) + 1].set_ylabel('Video\nJitter', fontsize = 12)
+            axs[index+1].set_ylabel(names[key] + '\nlatency', fontsize = 12)
+            axs[index + len(tracks) + 1].set_ylabel(names[key] + '\njitter', fontsize = 12)
         else :
-            axs[index+1].set_ylabel('Audio\nLatency', fontsize = 12)
+            axs[index+1].set_ylabel(names[key] + '\nlatency', fontsize = 12)
             num = round(len(axs[index+1].get_xticks()) / 10)
+            if num == 0 : 
+                num = 1
             axs[index+1].set_xticks(axs[index+1].get_xticks()[::num])        
-            axs[index + len(tracks) + 1].set_ylabel('Audio\nJitter', fontsize = 12)
-            num = round(len(axs[index + len(tracks) + 1].get_xticks()) / 10)
+            axs[index + len(tracks) + 1].set_ylabel(names[key] + '\njitter', fontsize = 12)
+            num = round(len(axs[index + len(tracks) + 1].get_xticks()) / 10)            
+            if num == 0 : 
+                num = 1
             axs[index + len(tracks) + 1].set_xticks(axs[index + len(tracks) + 1].get_xticks()[::num])
     
     props = {"rotation" : 45}

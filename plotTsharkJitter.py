@@ -26,11 +26,12 @@ def getIndex(li,target):
     return -1
 
 data = {}
-f = open('test.txt','r') 
+f = open('test3.txt','r') 
 max = 0
 min = sys.maxsize * 2 + 1
 avg = 0
 
+print(min)
 for row in f: 
     row = row.strip('\n').split('\t') 
     if(row[0].isnumeric()) :      
@@ -54,11 +55,11 @@ print("Minimum packet delta:", min)
 print("Average packet delta:", '%.2f'%(avg))
 
 fig, axs = plt.subplots(1)
-fig.suptitle('Relay, delta between packets', fontsize = 20)
+fig.suptitle('Relay, time difference between packets', fontsize = 20)
 
 for key, elem in data.items() :     
     axs.bar(elem.name, elem.delta, color = elem.color)
-axs.set_ylabel('Latency\n(ms)', fontsize = 12)
+axs.set_ylabel('Time delta \n(ms)', fontsize = 12)
 axs.set_xlabel('Object sequence number', fontsize = 12)
 num = round(len(axs.get_xticks()) / 10)
 axs.set_xticks(axs.get_xticks()[::num])

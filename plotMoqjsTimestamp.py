@@ -116,6 +116,7 @@ if len(tracks) == 1 :
     axs[0].set_title("All packets")
     axs[0].set_ylabel(names[key] + ' latency\n(ms)', fontsize = 12)
     axs[1].set_ylabel(names[key] + ' jitter\n(ms)', fontsize = 12)
+    axs[1].set_xlabel('Object sequence number', fontsize = 12)
     num = round(len(axs[0].get_xticks()) / 10)
     if num == 0 :
         num = 1

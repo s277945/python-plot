@@ -50,7 +50,7 @@ def getIndex(li,target):
 data = {}
 tracks = {}
 names = {}
-f = open('log_2023-12-20_23.57.9.txt','r') 
+f = open('H:\Tesi\moq-js\moq-js\logs\log_2023-12-21_12.40.48.txt','r') 
 for row in f: 
     row = row.strip('\n').split(';') 
     # print(row)
@@ -112,6 +112,8 @@ if len(tracks) == 1 :
     for index, key in enumerate(tracks) :    
         for elem in tracks[key].values() :
             axs[0].bar(elem.name, elem.latency, color = elem.color)
+            if elem.sender_jitter == None :
+                elem.setSenderJitter(0)
             axs[1].bar(elem.name, elem.sender_jitter, color = elem.color)
     axs[0].set_title("All packets")
     axs[0].set_ylabel(names[key] + ' latency\n(ms)', fontsize = 12)
@@ -142,6 +144,8 @@ else :
     for index, key in enumerate(tracks) : 
         for elem in tracks[key].values() : 
             axs[index+1].bar(elem.name, elem.latency, color = elem.color)
+            if elem.sender_jitter == None :
+                elem.setSenderJitter(0)
             axs[index + len(tracks) + 1].bar(elem.name, elem.sender_jitter, color = elem.color)
         if(index + 1 == len(tracks))  :
             axs[index + len(tracks) + 1].set_xlabel('Object sequence number', fontsize = 12)

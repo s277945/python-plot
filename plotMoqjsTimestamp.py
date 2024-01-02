@@ -1,6 +1,7 @@
 
 import matplotlib.pyplot as plt 
 import numpy as np
+import argparse
 
 class rowData :
     def __init__(self, name, latency=None, color=None, sender_ts=None, receiver_ts=None, sender_jitter=None, receiver_jitter=None):
@@ -50,7 +51,19 @@ def getIndex(li,target):
 data = {}
 tracks = {}
 names = {}
-f = open('H:\Tesi\moq-js\moq-js\logs\log_2023-12-21_12.40.48.txt','r') 
+argParser = argparse.ArgumentParser(prog='plotMoqjsTimestamp.py',
+                    description='Program that allows to plot moq-js logger data',
+                    epilog='By Alessandro Bottisio')
+argParser.add_argument('-f', '--file', required=False)
+args = argParser.parse_args()
+
+if args.file is not None and args.file != "" :
+    filename = 'H:\\Tesi\\moq-js\\moq-js\\logs\\' + args.file
+    print(filename)
+    f = open(filename,'r') 
+    print("a")
+else :
+    f = open('H:\\Tesi\\moq-js\\moq-js\\logs\\log.txt','r')
 for row in f: 
     row = row.strip('\n').split(';') 
     # print(row)
@@ -102,9 +115,10 @@ for row in f:
 
 # print(data)
 print("Tracks found: " + str(len(tracks)))
-print(names)
-    
-if len(tracks) == 1 :
+if len(tracks) == 0 :
+    print("No tracks found, program will exit") 
+    exit()
+elif len(tracks) == 1 :
     fig, axs = plt.subplots(2)
     fig.suptitle('moq-js latency test', fontsize = 20)
     ticks0 = []

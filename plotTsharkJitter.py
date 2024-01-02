@@ -26,7 +26,7 @@ def getIndex(li,target):
     return -1
 
 data = {}
-f = open('test3.txt','r') 
+f = open('test4.txt','r') 
 max = 0
 min = sys.maxsize * 2 + 1
 avg = 0

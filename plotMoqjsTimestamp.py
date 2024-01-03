@@ -73,56 +73,62 @@ if args.skipstart is not None :
     if skip < 0 or math.isnan(skip) :
         skip = 0
 
-count = 0       
+audio_row = -1
+video_row = -1
+skipping = True 
 for row in f: 
     row = row.strip('\n').split(';') 
-    count += 1
     # print(row)
-    if(row[0].isnumeric()) :       
+    if(row[0].isnumeric()) :      
         name = row[0] + "-" + row[2] 
         # if row has track id and latency value
-        if(4 < len(row) and row[4].isnumeric() and int(row[2]) > 0 and (count - 1) >= skip) : 
-            # add track to track array if not present and the received packet data to the individual track data array
-            # add row data (received packet data) to general data array
-            if row[0] not in tracks :
-                tracks[row[0]] = {}
-            if(row[3] == 'sent') :
-                if name in data :
-                    data[name].setSenderTS(int(row[4]))
-                    tracks[row[0]][row[2]].setSenderTS(int(row[4]))
-                else :
-                    data[name] = rowData(row[0] + "-" + row[2], sender_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))
-                    tracks[row[0]][row[2]] = rowData(row[2], sender_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))
-                if(5 < len(row) and row[5].isnumeric()) :
-                    data[name].setSenderJitter(int(row[5]))
-                    tracks[row[0]][row[2]].setSenderJitter(int(row[5]))
-            elif(row[3] == 'received') :
-                if(name in data) :
-                    data[name].setReceiverTS(int(row[4]))
-                    tracks[row[0]][row[2]].setReceiverTS(int(row[4]))
-                else :
-                    data[name] = rowData(row[0] + "-" + row[2], receiver_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))
-                    tracks[row[0]][row[2]] = rowData(row[2], receiver_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))                
-                if(5 < len(row) and row[5].isnumeric()) :
-                    data[name].seReceiverJitter(int(row[5]))
-                    tracks[row[0]][row[2]].setReceiverJitter(int(row[5]))
-            if name in data and int(data[name].getLatency()) > 35  :
-                data[name].setColor((0.8, 0.1, 0.1, 1))
-                tracks[row[0]][row[2]].setColor((0.8, 0.1, 0.1, 1))
-        elif(row[3] == 'too slow' and (count - 1) >= skip) :
+        if(4 < len(row) and row[4].isnumeric() and int(row[2]) > 0) :     
+            if int(row[2]) >= skip :
+                skipping = False   
+            if (not skipping) and ((audio_row == row[0] and int(row[2]) >= skip) or video_row == row[0]) :           
+                # add track to track array if not present and the received packet data to the individual track data array
+                # add row data (received packet data) to general data array
+                if row[0] not in tracks :
+                    tracks[row[0]] = {}
+                if(row[3] == 'sent') :
+                    if name in data :
+                        data[name].setSenderTS(int(row[4]))
+                        tracks[row[0]][row[2]].setSenderTS(int(row[4]))
+                    else :
+                        data[name] = rowData(row[0] + "-" + row[2], sender_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))
+                        tracks[row[0]][row[2]] = rowData(row[2], sender_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))
+                    if(5 < len(row) and row[5].isnumeric()) :
+                        data[name].setSenderJitter(int(row[5]))
+                        tracks[row[0]][row[2]].setSenderJitter(int(row[5]))
+                elif(row[3] == 'received') :
+                    if(name in data) :
+                        data[name].setReceiverTS(int(row[4]))
+                        tracks[row[0]][row[2]].setReceiverTS(int(row[4]))
+                    else :
+                        data[name] = rowData(row[0] + "-" + row[2], receiver_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))
+                        tracks[row[0]][row[2]] = rowData(row[2], receiver_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))                
+                    if(5 < len(row) and row[5].isnumeric()) :
+                        data[name].seReceiverJitter(int(row[5]))
+                        tracks[row[0]][row[2]].setReceiverJitter(int(row[5]))
+                if name in data and int(data[name].getLatency()) > 35  :
+                    data[name].setColor((0.8, 0.1, 0.1, 1))
+                    tracks[row[0]][row[2]].setColor((0.8, 0.1, 0.1, 1))
+        elif(row[3] == 'too slow' and not skipping) :
             # change item color if too slow packet
             if name in data : 
                 data[name].setColor((0.6, 0.0, 0.4, 1)) 
                 tracks[row[0]][row[2]].setColor((0.6, 0.0, 0.4, 1))
-        elif(row[3] == 'too old'  and (count - 1) >= skip) :
+        elif(row[3] == 'too old'  and not skipping) :
             # change item color if too old packet
             if name in data : 
                 data[name].setColor((0.6, 0.2, 0.2, 1)) 
                 tracks[row[0]][row[2]].setColor((0.6, 0.2, 0.2, 1))
         elif(row[3] == 'AUDIO') :
             names[row[0]] = 'Audio'
+            audio_row = row[0]
         elif(row[3] == 'VIDEO') :
             names[row[0]] = 'Video'
+            video_row = row[0]
 
 # print(data)
 print("Tracks found: " + str(len(tracks)))

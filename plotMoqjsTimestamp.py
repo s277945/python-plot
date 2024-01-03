@@ -1,4 +1,5 @@
 
+import math
 import matplotlib.pyplot as plt 
 import numpy as np
 import argparse
@@ -55,6 +56,7 @@ argParser = argparse.ArgumentParser(prog='plotMoqjsTimestamp.py',
                     description='Program that allows to plot moq-js logger data',
                     epilog='By Alessandro Bottisio')
 argParser.add_argument('-f', '--file', required=False)
+argParser.add_argument('-sks', '--skipstart', required=False)
 args = argParser.parse_args()
 
 if args.file is not None and args.file != "" :
@@ -64,13 +66,22 @@ if args.file is not None and args.file != "" :
     print("a")
 else :
     f = open('H:\\Tesi\\moq-js\\moq-js\\logs\\log.txt','r')
+    
+skip = 0
+if args.skipstart is not None :    
+    skip = int(args.skipstart)
+    if skip < 0 or math.isnan(skip) :
+        skip = 0
+
+count = 0       
 for row in f: 
     row = row.strip('\n').split(';') 
+    count += 1
     # print(row)
     if(row[0].isnumeric()) :       
         name = row[0] + "-" + row[2] 
         # if row has track id and latency value
-        if(4 < len(row) and row[4].isnumeric() and int(row[2]) > 0) : 
+        if(4 < len(row) and row[4].isnumeric() and int(row[2]) > 0 and (count - 1) >= skip) : 
             # add track to track array if not present and the received packet data to the individual track data array
             # add row data (received packet data) to general data array
             if row[0] not in tracks :
@@ -98,12 +109,12 @@ for row in f:
             if name in data and int(data[name].getLatency()) > 35  :
                 data[name].setColor((0.8, 0.1, 0.1, 1))
                 tracks[row[0]][row[2]].setColor((0.8, 0.1, 0.1, 1))
-        elif(row[3] == 'too slow') :
+        elif(row[3] == 'too slow' and (count - 1) >= skip) :
             # change item color if too slow packet
             if name in data : 
                 data[name].setColor((0.6, 0.0, 0.4, 1)) 
                 tracks[row[0]][row[2]].setColor((0.6, 0.0, 0.4, 1))
-        elif(row[3] == 'too old') :
+        elif(row[3] == 'too old'  and (count - 1) >= skip) :
             # change item color if too old packet
             if name in data : 
                 data[name].setColor((0.6, 0.2, 0.2, 1)) 

@@ -61,12 +61,12 @@ argParser.add_argument('-sks', '--skipstart', required=False)
 args = argParser.parse_args()
 
 if args.file is not None and args.file != "" :
-    filename = 'H:\\Tesi\\moq-js\\moq-js\\logs\\' + args.file
+    filename = args.file
     print(filename)
     f = open(filename,'r') 
     print("a")
 else :
-    f = open('H:\\Tesi\\moq-js\\moq-js\\logs\\log.txt','r')
+    f = open('log.txt','r')
     
 skip = 0
 if args.skipstart is not None :    

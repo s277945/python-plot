@@ -1,5 +1,6 @@
 
 import math
+import matplotlib as mpl
 import matplotlib.pyplot as plt 
 import numpy as np
 import argparse
@@ -160,7 +161,7 @@ elif len(tracks) == 1 :
         plt.setp(ax.get_xticklabels(), **props)
     
 else :
-    fig, axs = plt.subplots(len(tracks)*2 + 1)
+    fig, axs = plt.subplots(len(tracks)*2 + 1, figsize=(14, 9))
     fig.suptitle('moq-js latency test', fontsize = 20)
     ticks0 = []
     for key, elem in data.items() :     
@@ -197,6 +198,7 @@ else :
     props = {"rotation" : 45}
     for ax in axs : 
         plt.setp(ax.get_xticklabels(), **props)
-        
+plt.subplots_adjust(left = 0.078, right = 0.98, hspace = 0.5)
+mpl.rcParams['figure.dpi'] = 300
 plt.legend() 
 plt.show() 

@@ -58,6 +58,7 @@ argParser = argparse.ArgumentParser(prog='plotMoqjsTimestamp.py',
                     epilog='By Alessandro Bottisio')
 argParser.add_argument('-f', '--file', required=False)
 argParser.add_argument('-sks', '--skipstart', required=False)
+argParser.add_argument('-mh', '--maxheight', required=False)
 args = argParser.parse_args()
 
 if args.file is not None and args.file != "" :
@@ -73,7 +74,16 @@ if args.skipstart is not None :
     skip = int(args.skipstart)
     if skip < 0 or math.isnan(skip) :
         skip = 0
-
+maxheight = 0
+if args.maxheight is not None :    
+    if type(args.maxheight) != int :
+        print(str(args.maxheight))
+        if str(args.maxheight) == 'auto' :
+            maxheight = -1
+    else :
+        maxheight = int(args.maxheight)
+        if maxheight < 0 : 
+            maxheight = 0
 audio_row = -1
 video_row = -1
 skipping = True 
@@ -163,22 +173,34 @@ elif len(tracks) == 1 :
 else :
     fig, axs = plt.subplots(len(tracks)*2 + 1, figsize=(14, 9))
     fig.suptitle('moq-js latency test', fontsize = 20)
-    ticks0 = []
+    ticks0 = []    
+    totalLatency = 0
+    axs[0].set_title("All packets")
+    axs[0].set_ylabel('Latency\n(ms)', fontsize = 12)
     for key, elem in data.items() :     
         axs[0].bar(elem.name, elem.latency, color = elem.color)
-        axs[0].set_title("All packets")
-        axs[0].set_ylabel('Latency\n(ms)', fontsize = 12)
+        totalLatency += elem.latency
         num = round(len(axs[0].get_xticks()) / 10)
         if num == 0 : 
             num = 1
-        axs[0].set_xticks(axs[0].get_xticks()[::num])
-
+    axs[0].set_xticks(axs[0].get_xticks()[::num])
+    bottom, top = axs[0].get_ylim()
+    ylen = top - bottom 
+    if maxheight > 0 and ylen > maxheight : 
+        axs[0].set_ylim(0, maxheight)
+    if maxheight < 0 :
+        axs[0].set_ylim(0, totalLatency * 1.6 / len(data))
+        
     for index, key in enumerate(tracks) : 
+        totalLatency = 0
+        totalJitter = 0
         for elem in tracks[key].values() : 
             axs[index+1].bar(elem.name, elem.latency, color = elem.color)
+            totalLatency += elem.latency
             if elem.sender_jitter == None :
                 elem.setSenderJitter(0)
             axs[index + len(tracks) + 1].bar(elem.name, elem.sender_jitter, color = elem.color)
+            totalJitter += elem.sender_jitter
         if(index + 1 == len(tracks))  :
             axs[index + len(tracks) + 1].set_xlabel('Object sequence number', fontsize = 12)
             axs[index+1].set_ylabel(names[key] + '\nlatency', fontsize = 12)
@@ -194,10 +216,25 @@ else :
             if num == 0 : 
                 num = 1
             axs[index + len(tracks) + 1].set_xticks(axs[index + len(tracks) + 1].get_xticks()[::num])
-    
+        
+        bottom, top = axs[index+1].get_ylim()
+        ylen = top - bottom 
+        if maxheight > 0 and ylen > maxheight : 
+            axs[index+1].set_ylim(0, maxheight)
+        if maxheight < 0 :
+            axs[index+1].set_ylim(0, totalLatency * 1.6 / len(tracks[key]))
+        
+        bottom, top = axs[index + len(tracks) + 1].get_ylim()
+        ylen = top - bottom 
+        if maxheight > 10: 
+            axs[index + len(tracks) + 1].set_ylim(0, totalJitter * maxheight / 10 / len(tracks[key]))
+        else :
+            axs[index + len(tracks) + 1].set_ylim(0, totalJitter * 6 / len(tracks[key]))
+            
     props = {"rotation" : 45}
     for ax in axs : 
         plt.setp(ax.get_xticklabels(), **props)
+        
 plt.subplots_adjust(left = 0.078, right = 0.98, hspace = 0.5)
 mpl.rcParams['figure.dpi'] = 300
 plt.legend() 

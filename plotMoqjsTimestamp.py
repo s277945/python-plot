@@ -189,7 +189,7 @@ else :
     if maxheight > 0 and ylen > maxheight : 
         axs[0].set_ylim(0, maxheight)
     if maxheight < 0 :
-        axs[0].set_ylim(0, totalLatency * 1.6 / len(data))
+        axs[0].set_ylim(0, totalLatency * 1.9 / len(data))
         
     for index, key in enumerate(tracks) : 
         totalLatency = 0
@@ -222,7 +222,7 @@ else :
         if maxheight > 0 and ylen > maxheight : 
             axs[index+1].set_ylim(0, maxheight)
         if maxheight < 0 :
-            axs[index+1].set_ylim(0, totalLatency * 1.6 / len(tracks[key]))
+            axs[index+1].set_ylim(0, totalLatency * 1.9 / len(tracks[key]))
         
         bottom, top = axs[index + len(tracks) + 1].get_ylim()
         ylen = top - bottom 

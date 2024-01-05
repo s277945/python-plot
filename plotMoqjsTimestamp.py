@@ -84,6 +84,7 @@ if args.maxheight is not None :
         maxheight = int(args.maxheight)
         if maxheight < 0 : 
             maxheight = 0
+            
 audio_row = -1
 video_row = -1
 skipping = True 

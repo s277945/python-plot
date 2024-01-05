@@ -62,10 +62,10 @@ args = argParser.parse_args()
 
 if args.file is not None and args.file != "" :
     filename = args.file
-    print(filename)
+    print("Opening moq-js log file", filename)
     f = open(filename,'r') 
-    print("a")
 else :
+    print("Opening moq-js log file", 'log.txt')
     f = open('log.txt','r')
     
 skip = 0
@@ -76,7 +76,6 @@ if args.skipstart is not None :
 maxheight = 0
 if args.maxheight is not None :    
     if type(args.maxheight) != int :
-        print(str(args.maxheight))
         if str(args.maxheight) == 'auto' :
             maxheight = -1
     else :
@@ -236,5 +235,5 @@ else :
         plt.setp(ax.get_xticklabels(), **props)
         
 plt.subplots_adjust(left = 0.078, right = 0.98, hspace = 0.5)
-plt.legend() 
+# plt.legend() 
 plt.show() 

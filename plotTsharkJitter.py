@@ -33,7 +33,6 @@ if args.file is not None and args.file != "" :
     filename = args.file
     print(filename)
     f = open(filename,'r') 
-    print("a")
 else :
     f = open('test.txt','r')
     
@@ -45,7 +44,6 @@ if args.skipstart is not None :
 maxheight = 0
 if args.maxheight is not None :    
     if type(args.maxheight) != int :
-        print(str(args.maxheight))
         if str(args.maxheight) == 'auto' :
             maxheight = -1
     else :
@@ -65,7 +63,6 @@ min = sys.maxsize * 2 + 1
 avg = 0
 skipping = True 
 
-print(min)
 for row in f: 
     row = row.strip('\n').split('\t') 
     if int(row[0]) >= skip :
@@ -90,7 +87,7 @@ print("Maximum packet delta:", max)
 print("Minimum packet delta:", min)
 print("Average packet delta:", '%.2f'%(avg))
 
-fig, axs = plt.subplots(1)
+fig, axs = plt.subplots(1, figsize=(12, 6))
 fig.suptitle('Relay, time difference between packets', fontsize = 20)
 
 
@@ -112,6 +109,7 @@ if maxheight < 0 :
 
 props = {"rotation" : 45}
 for ax in [axs] : 
-    plt.setp(ax.get_xticklabels(), **props)
+    plt.setp(ax.get_xticklabels(), **props)    
+plt.subplots_adjust(left = 0.078, right = 0.98, hspace = 0.55)
 plt.legend() 
 plt.show() 

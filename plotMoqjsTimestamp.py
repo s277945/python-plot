@@ -1,6 +1,5 @@
 
 import math
-import matplotlib as mpl
 import matplotlib.pyplot as plt 
 import numpy as np
 import argparse
@@ -237,6 +236,5 @@ else :
         plt.setp(ax.get_xticklabels(), **props)
         
 plt.subplots_adjust(left = 0.078, right = 0.98, hspace = 0.5)
-mpl.rcParams['figure.dpi'] = 300
 plt.legend() 
 plt.show() 

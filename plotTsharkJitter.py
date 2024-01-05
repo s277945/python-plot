@@ -79,7 +79,8 @@ for row in f:
             max = rowdata
         if(rowdata < min) :
             min = rowdata
-        avg = (rowdata + avg * (int(name) - 1)) / int(name)
+        avg += rowdata
+avg /= len(data)
         
 
 print("Number of packets:", len(data))

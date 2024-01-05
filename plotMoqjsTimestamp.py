@@ -147,7 +147,7 @@ if len(tracks) == 0 :
     print("No tracks found, program will exit") 
     exit()
 elif len(tracks) == 1 :
-    fig, axs = plt.subplots(2)
+    fig, axs = plt.subplots(2, figsize=(12, 7))
     fig.suptitle('moq-js latency test', fontsize = 20)
     ticks0 = []
     

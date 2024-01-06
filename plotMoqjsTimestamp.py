@@ -5,13 +5,14 @@ import numpy as np
 import argparse
 
 class rowData :
-    def __init__(self, name, latency=None, color=None, sender_ts=None, receiver_ts=None, sender_jitter=None, receiver_jitter=None):
+    def __init__(self, name, latency=None, color=None, sender_ts=None, receiver_ts=None, sender_jitter=None, receiver_jitter=None, value=None):
         self.name = name
         self.color = color
         self.sender_ts = sender_ts
         self.receiver_ts = receiver_ts
         self.sender_jitter = sender_jitter
         self.receiver_jitter = receiver_jitter
+        self.value = value
         if (sender_ts is not None and receiver_ts is not None and receiver_ts > sender_ts) : 
             self.latency = receiver_ts - sender_ts
         elif (latency is not None) : 
@@ -42,6 +43,8 @@ class rowData :
         return self.latency
     def setColor(self, color):
         self.color = color
+    def getValue(self):
+        return self.value
 
 def getIndex(li,target): 
     for index, x in enumerate(li): 
@@ -58,6 +61,7 @@ argParser = argparse.ArgumentParser(prog='plotMoqjsTimestamp.py',
 argParser.add_argument('-f', '--file', required=False)
 argParser.add_argument('-sks', '--skipstart', required=False)
 argParser.add_argument('-mh', '--maxheight', required=False)
+argParser.add_argument('-cpu', '--cpulog', required=False)
 args = argParser.parse_args()
 
 if args.file is not None and args.file != "" :
@@ -82,10 +86,14 @@ if args.maxheight is not None :
         maxheight = int(args.maxheight)
         if maxheight < 0 : 
             maxheight = 0
+cpulog = False
+if args.cpulog == 'true' : 
+    cpulog = True
             
 audio_row = -1
 video_row = -1
 skipping = True 
+cpuLogCount = 0
 for row in f: 
     row = row.strip('\n').split(';') 
     # print(row)
@@ -139,39 +147,75 @@ for row in f:
         elif(row[3] == 'VIDEO') :
             names[row[0]] = 'Video'
             video_row = row[0]
-
+    elif cpulog and row[3] == 'CPU' :
+        if 'CPU' not in tracks :
+            tracks['CPU'] = {}
+        color = (0, 0, 0, 1)
+        if float(row[4]) > 50 :
+            color=(0.6, 0.2, 0.2, 1)
+        else :
+            color=(0.1, 0.1, 0.8, 1)
+        tracks['CPU'][cpuLogCount] = rowData(cpuLogCount, value=float(row[4]), color=color)
+        cpuLogCount += 1
+        print(cpuLogCount)
+    print(row[3])
 # print(data)
 print("Tracks found: " + str(len(tracks)))
+
+additional_axs = 0
+if cpulog : 
+    additional_axs += 1
+    
 if len(tracks) == 0 :
     print("No tracks found, program will exit") 
     exit()
-elif len(tracks) == 1 :
-    fig, axs = plt.subplots(2, figsize=(12, 7))
+    
+elif ((len(tracks) == 1) and not cpulog) or ((len(tracks) == 1 + additional_axs) and cpulog) :
+    print("a")
+    fig, axs = plt.subplots(2 + additional_axs, figsize=(12, 7))
     fig.suptitle('moq-js latency test', fontsize = 20)
     ticks0 = []
     
     totalLatency = 0
     totalJitter = 0
+    totalCPU = 0
     for index, key in enumerate(tracks) :    
+        print(key)
         for elem in tracks[key].values() :
-            axs[0].bar(elem.name, elem.latency, color = elem.color)
-            totalLatency += elem.latency
-            if elem.sender_jitter == None :
-                elem.setSenderJitter(0)
-            axs[1].bar(elem.name, elem.sender_jitter, color = elem.color)
-            if elem.sender_jitter > 100 and maxheight < 0 :
-                totalJitter += 100
-            else : 
-                totalJitter += elem.sender_jitter
+            if(key == 'CPU') :
+                if cpulog : 
+                    axs[2].bar(elem.name, elem.value, color = elem.color)
+                    print(elem.value)
+                    totalCPU += elem.value
+            else :   
+                axs[0].bar(elem.name, elem.latency, color = elem.color)
+                totalLatency += elem.latency
+                if elem.sender_jitter == None :
+                    elem.setSenderJitter(0)
+                axs[1].bar(elem.name, elem.sender_jitter, color = elem.color)
+                if elem.sender_jitter > 100 and maxheight < 0 :
+                    totalJitter += 100
+                else : 
+                    totalJitter += elem.sender_jitter
+                
     axs[0].set_title("All packets")
-    axs[0].set_ylabel(names[key] + ' latency\n(ms)', fontsize = 12)
-    axs[1].set_ylabel(names[key] + ' jitter\n(ms)', fontsize = 12)
+    for key in names :
+        if(key.isnumeric()) :
+            axs[0].set_ylabel(names[key] + ' latency\n(ms)', fontsize = 12)
+            axs[1].set_ylabel(names[key] + ' jitter\n(ms)', fontsize = 12)
+    if cpulog :
+        axs[2].set_ylabel('CPU usage\n(%)', fontsize = 12)
+        axs[2].set_xlabel('100 ms intervals', fontsize = 12)
     axs[1].set_xlabel('Object sequence number', fontsize = 12)
     num = round(len(axs[0].get_xticks()) / 10)
     if num == 0 :
         num = 1
     axs[0].set_xticks(axs[0].get_xticks()[::num])    
     axs[1].set_xticks(axs[1].get_xticks()[::num])
+    if cpulog :         
+        axs[2].set_xticks(axs[2].get_xticks()[::num])
+        # minx, maxx = axs[2].get_xlim()
+        # axs[2].set_xlim(-1, maxx)
     props = {"rotation" : 45}
     for ax in axs : 
         plt.setp(ax.get_xticklabels(), **props)

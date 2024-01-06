@@ -112,5 +112,5 @@ props = {"rotation" : 45}
 for ax in [axs] : 
     plt.setp(ax.get_xticklabels(), **props)    
 plt.subplots_adjust(left = 0.078, right = 0.98, hspace = 0.55)
-plt.legend() 
+# plt.legend() 
 plt.show() 

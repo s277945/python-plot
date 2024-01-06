@@ -150,12 +150,19 @@ elif len(tracks) == 1 :
     fig.suptitle('moq-js latency test', fontsize = 20)
     ticks0 = []
     
+    totalLatency = 0
+    totalJitter = 0
     for index, key in enumerate(tracks) :    
         for elem in tracks[key].values() :
             axs[0].bar(elem.name, elem.latency, color = elem.color)
+            totalLatency += elem.latency
             if elem.sender_jitter == None :
                 elem.setSenderJitter(0)
             axs[1].bar(elem.name, elem.sender_jitter, color = elem.color)
+            if elem.sender_jitter > 100 and maxheight < 0 :
+                totalJitter += 100
+            else : 
+                totalJitter += elem.sender_jitter
     axs[0].set_title("All packets")
     axs[0].set_ylabel(names[key] + ' latency\n(ms)', fontsize = 12)
     axs[1].set_ylabel(names[key] + ' jitter\n(ms)', fontsize = 12)
@@ -168,6 +175,17 @@ elif len(tracks) == 1 :
     props = {"rotation" : 45}
     for ax in axs : 
         plt.setp(ax.get_xticklabels(), **props)
+    bottom, top = axs[0].get_ylim()
+    ylen = top - bottom 
+    if maxheight > 0 and ylen > maxheight : 
+        axs[0].set_ylim(0, maxheight)
+    if maxheight < 0 :
+        axs[0].set_ylim(0, totalLatency * 1.9 / len(data))
+        
+    bottom, top = axs[1].get_ylim()
+    ylen = top - bottom 
+    if maxheight < 0 and (totalJitter * 1.9 / len(data)) > 10 : 
+        axs[1].set_ylim(0, totalJitter / len(tracks[key]))
     
 else :
     fig, axs = plt.subplots(len(tracks)*2 + 1, figsize=(14, 9))
@@ -199,7 +217,10 @@ else :
             if elem.sender_jitter == None :
                 elem.setSenderJitter(0)
             axs[index + len(tracks) + 1].bar(elem.name, elem.sender_jitter, color = elem.color)
-            totalJitter += elem.sender_jitter
+            if elem.sender_jitter > 100 and maxheight < 0 :
+                totalJitter += 100
+            else : 
+                totalJitter += elem.sender_jitter
         if(index + 1 == len(tracks))  :
             axs[index + len(tracks) + 1].set_xlabel('Object sequence number', fontsize = 12)
             axs[index+1].set_ylabel(names[key] + '\nlatency', fontsize = 12)
@@ -225,15 +246,13 @@ else :
         
         bottom, top = axs[index + len(tracks) + 1].get_ylim()
         ylen = top - bottom 
-        if maxheight > 10: 
-            axs[index + len(tracks) + 1].set_ylim(0, totalJitter * maxheight / 10 / len(tracks[key]))
-        else :
-            axs[index + len(tracks) + 1].set_ylim(0, totalJitter * 6 / len(tracks[key]))
+        if maxheight < 0 and (totalJitter * 1.9 / len(data)) > 10 : 
+            axs[index + len(tracks) + 1].set_ylim(0, totalJitter / len(tracks[key]))
             
     props = {"rotation" : 45}
     for ax in axs : 
         plt.setp(ax.get_xticklabels(), **props)
         
-plt.subplots_adjust(left = 0.078, right = 0.98, hspace = 0.5)
+plt.subplots_adjust(left = 0.07, right = 0.975, hspace = 0.5)
 # plt.legend() 
 plt.show() 

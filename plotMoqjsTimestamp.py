@@ -308,6 +308,6 @@ else :
     props = {"rotation" : 45, "visible" : True}
     for ax in axs : 
         plt.setp(ax.get_xticklabels(), **props)
-plt.subplots_adjust(left = 0.07, right = 0.975, hspace = 0.5)
+plt.subplots_adjust(left = 0.07, right = 0.975, hspace = 0.85)
 # plt.legend() 
 plt.show() 

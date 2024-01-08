@@ -54,6 +54,7 @@ def getIndex(li,target):
 
 data = {}
 tracks = {}
+cpuTrack = {}
 names = {}
 argParser = argparse.ArgumentParser(prog='plotMoqjsTimestamp.py',
                     description='Program that allows to plot moq-js logger data',
@@ -156,14 +157,12 @@ for row in f:
             names[row[0]] = 'Video'
             video_row = row[0]
     elif (not skipping) and cpulog and row[3] == 'CPU' :
-        if 'CPU' not in tracks :
-            tracks['CPU'] = {}
         color = (0, 0, 0, 1)
         if float(row[4]) > 50 :
             color=(0.6, 0.2, 0.2, 1)
         else :
             color=(0.1, 0.1, 0.8, 1)
-        tracks['CPU'][cpuLogCount] = rowData(cpuLogCount, value=float(row[4]), sender_ts=int(row[2]), color=color)
+        cpuTrack[cpuLogCount] = rowData(cpuLogCount, value=float(row[4]), sender_ts=int(row[2]), color=color)
         cpuLogCount += 1
         
 print("Tracks found: " + str(len(tracks)))
@@ -176,7 +175,7 @@ if len(tracks) == 0 :
     print("No tracks found, program will exit") 
     exit()
     
-elif ((len(tracks) == 1) and not cpulog) or ((len(tracks) == 1 + additional_axs) and cpulog) :
+elif (len(tracks) == 1) :
     fig, axs = plt.subplots(2 + additional_axs, figsize=(12, 7), sharex = sharex)
     fig.suptitle('moq-js latency test', fontsize = 20)
     ticks0 = []
@@ -229,7 +228,7 @@ elif ((len(tracks) == 1) and not cpulog) or ((len(tracks) == 1 + additional_axs)
         axs[1].set_ylim(0, totalJitter / len(tracks[key]))
     
 else :
-    fig, axs = plt.subplots(len(tracks)*2 + 1, figsize=(14, 9), sharex = sharex)
+    fig, axs = plt.subplots(len(tracks)*2 + 1 + additional_axs, figsize=(14, 9), sharex = sharex)
     fig.suptitle('moq-js latency test', fontsize = 20)
     
     ticks0 = []    
@@ -240,12 +239,13 @@ else :
     axs[0].set_ylabel('Latency\n(ms)', fontsize = 12)
     
     for key, elem in data.items() :     
-        axs[0].bar(elem.name, elem.latency, color = elem.color)
+        if sharex : axs[0].bar((elem.sender_ts - startTS)/1000, elem.latency, color = elem.color)
+        else : axs[0].bar(str((elem.sender_ts - startTS)/1000), elem.latency, color = elem.color)
         totalLatency += elem.latency
-        num = round(len(axs[0].get_xticks()) / 10)
-        if num == 0 : 
-            num = 1
+    num = round(len(axs[0].get_xticks()) / 20)
+    if num == 0 : num = 1        
     axs[0].set_xticks(axs[0].get_xticks()[::num])
+    
     bottom, top = axs[0].get_ylim()
     ylen = top - bottom 
     if maxheight > 0 and ylen > maxheight : 
@@ -257,55 +257,54 @@ else :
         totalLatency = 0
         totalJitter = 0
         for elem in tracks[key].values() : 
-            if(key == 'CPU') :
-                if cpulog : 
-                    if sharex : axs[2].bar((elem.sender_ts - startTS)/1000, elem.value, color = elem.color)
-                    else : axs[2].bar(str((elem.sender_ts - startTS)/1000), elem.value, color = elem.color)
-                    totalCPU += elem.value
-            else :   
-                if sharex : axs[index + 1].bar((elem.sender_ts - startTS)/1000, elem.latency, color = elem.color)
-                else : axs[index + 1].bar(str((elem.sender_ts - startTS)/1000), elem.latency, color = elem.color)
-                totalLatency += elem.latency
-                if elem.sender_jitter == None :
-                    elem.setSenderJitter(0)
-                if sharex : axs[index + 1].bar((elem.sender_ts - startTS)/1000, elem.sender_jitter, color = elem.color)
-                else : axs[index + 1].bar(str((elem.sender_ts - startTS)/1000), elem.sender_jitter, color = elem.color)
-                if elem.sender_jitter > 100 and maxheight < 0 :
-                    totalJitter += 100
-                else : 
-                    totalJitter += elem.sender_jitter
-        if(key == 'CPU') :
-            axs[index + len(tracks) + 1].set_xlabel('Time in seconds', fontsize = 12)
-            axs[index + len(tracks) + 1].set_ylabel('CPU usage\n(%)', fontsize = 12)
-        else :
-            if(index + 1 == len(tracks))  :
-                axs[index + len(tracks) + 1].set_xlabel('Time in seconds', fontsize = 12)
-                axs[index + 1].set_ylabel(names[key] + '\nlatency', fontsize = 12)
-                axs[index + len(tracks) + 1].set_ylabel(names[key] + '\njitter', fontsize = 12)
-            else :
-                axs[index + 1].set_ylabel(names[key] + '\nlatency', fontsize = 12)
-                num = round(len(axs[index + 1].get_xticks()) / 10)
-                if num == 0 : 
-                    num = 1
-                axs[index + 1].set_xticks(axs[index + 1].get_xticks()[::num])        
-                axs[index + len(tracks) + 1 - additional_axs].set_ylabel(names[key] + '\njitter', fontsize = 12)
-                num = round(len(axs[index + len(tracks) + 1 - additional_axs].get_xticks()) / 10)            
-                if num == 0 : 
-                    num = 1
-                axs[index + len(tracks) + 1 - additional_axs].set_xticks(axs[index + len(tracks) + 1 - additional_axs].get_xticks()[::num])
-        
-        bottom, top = axs[index + 1].get_ylim()
+            if sharex : axs[(index+1)*2 - 1].bar((elem.sender_ts - startTS)/1000, elem.latency, color = elem.color)
+            else : axs[(index+1)*2 - 1].bar(str((elem.sender_ts - startTS)/1000), elem.latency, color = elem.color)
+            totalLatency += elem.latency
+            if elem.sender_jitter == None :
+                elem.setSenderJitter(0)
+            if sharex : axs[(index+1)*2].bar((elem.sender_ts - startTS)/1000, elem.sender_jitter, color = elem.color)
+            else : axs[(index+1)*2].bar(str((elem.sender_ts - startTS)/1000), elem.sender_jitter, color = elem.color)
+            if elem.sender_jitter > 100 and maxheight < 0 :
+                totalJitter += 100
+            else : 
+                totalJitter += elem.sender_jitter
+                
+        if not cpulog : axs[-1].set_xlabel('Time in seconds', fontsize = 12)
+        axs[(index+1)*2 - 1].set_ylabel(names[key] + '\nlatency', fontsize = 12)
+        num = round(len(axs[(index+1)*2 - 1].get_xticks()) / 20)
+        if num == 0 : 
+            num = 1
+        axs[(index+1)*2 - 1].set_xticks(axs[(index+1)*2 - 1].get_xticks()[::num])   
+        axs[(index+1)*2].set_ylabel(names[key] + '\njitter', fontsize = 12)
+        num = round(len(axs[(index+1)*2].get_xticks()) / 20)            
+        if num == 0 : num = 1
+        axs[(index+1)*2].set_xticks(axs[(index+1)*2].get_xticks()[::num])
+            
+        bottom, top = axs[(index+1)*2 - 1].get_ylim()
         ylen = top - bottom 
         if maxheight > 0 and ylen > maxheight : 
-            axs[index + 1].set_ylim(0, maxheight)
+            axs[(index+1)*2 - 1].set_ylim(0, maxheight)
         if maxheight < 0 :
-            axs[index + 1].set_ylim(0, totalLatency * 1.9 / len(tracks[key]))
+            axs[(index+1)*2 - 1].set_ylim(0, totalLatency * 1.9 / len(tracks[key]))
         
-        bottom, top = axs[index + len(tracks) + 1 - additional_axs].get_ylim()
+        bottom, top = axs[(index+1)*2].get_ylim()
         ylen = top - bottom 
         if maxheight < 0 and (totalJitter * 1.9 / len(data)) > 10 : 
-            axs[index + len(tracks) + 1 - additional_axs].set_ylim(0, totalJitter / len(tracks[key]))
-            
+            axs[(index+1)*2].set_ylim(0, totalJitter / len(tracks[key]))
+    
+    for elem in cpuTrack.values() :
+        if cpulog : 
+            if sharex : axs[-1].bar((elem.sender_ts - startTS)/1000, elem.value, color = elem.color)
+            else : axs[-1].bar(str((elem.sender_ts - startTS)/1000), elem.value, color = elem.color)
+            totalCPU += elem.value
+        
+    if cpulog : 
+        axs[-1].set_xlabel('Time in seconds', fontsize = 12)
+        axs[-1].set_ylabel('CPU usage\n(%)', fontsize = 12)
+        num = round(len(axs[-1].get_xticks()) / 20)            
+        if num == 0 : num = 1
+        axs[-1].set_xticks(axs[-1].get_xticks()[::num])
+           
     props = {"rotation" : 45, "visible" : True}
     for ax in axs : 
         plt.setp(ax.get_xticklabels(), **props)

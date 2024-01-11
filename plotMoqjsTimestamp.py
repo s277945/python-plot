@@ -164,7 +164,11 @@ for row in f:
             color=(0.1, 0.1, 0.8, 1)
         cpuTrack[cpuLogCount] = rowData(cpuLogCount, value=float(row[4]), sender_ts=int(row[2]), color=color)
         cpuLogCount += 1
-        
+
+# filter cpu logs with timestamp greater than last packet log sender_ts
+lastTS = data[list(data)[-1]].sender_ts
+if lastTS is not None : cpuTrack = {k:v for k,v in cpuTrack.items() if (lastTS + 99 > v.sender_ts and v.sender_ts is not None)}
+
 print("Tracks found: " + str(len(tracks)))
 
 additional_axs = 0
@@ -238,10 +242,11 @@ else :
     axs[0].set_title("All packets")
     axs[0].set_ylabel('Latency\n(ms)', fontsize = 12)
     
-    for key, elem in data.items() :     
-        if sharex : axs[0].bar((elem.sender_ts - startTS)/1000, elem.latency, color = elem.color)
-        else : axs[0].bar(str((elem.sender_ts - startTS)/1000), elem.latency, color = elem.color)
-        totalLatency += elem.latency
+    for key, elem in data.items() :   
+        if elem.sender_ts is not None :  
+            if sharex : axs[0].bar((elem.sender_ts - startTS)/1000, elem.latency, color = elem.color)
+            else : axs[0].bar(str((elem.sender_ts - startTS)/1000), elem.latency, color = elem.color)
+            totalLatency += elem.latency
     num = round(len(axs[0].get_xticks()) / 20)
     if num == 0 : num = 1        
     axs[0].set_xticks(axs[0].get_xticks()[::num])
@@ -257,17 +262,18 @@ else :
         totalLatency = 0
         totalJitter = 0
         for elem in tracks[key].values() : 
-            if sharex : axs[(index+1)*2 - 1].bar((elem.sender_ts - startTS)/1000, elem.latency, color = elem.color)
-            else : axs[(index+1)*2 - 1].bar(str((elem.sender_ts - startTS)/1000), elem.latency, color = elem.color)
-            totalLatency += elem.latency
-            if elem.sender_jitter == None :
-                elem.setSenderJitter(0)
-            if sharex : axs[(index+1)*2].bar((elem.sender_ts - startTS)/1000, elem.sender_jitter, color = elem.color)
-            else : axs[(index+1)*2].bar(str((elem.sender_ts - startTS)/1000), elem.sender_jitter, color = elem.color)
-            if elem.sender_jitter > 100 and maxheight < 0 :
-                totalJitter += 100
-            else : 
-                totalJitter += elem.sender_jitter
+            if elem.sender_ts is not None :  
+                if sharex : axs[(index+1)*2 - 1].bar((elem.sender_ts - startTS)/1000, elem.latency, color = elem.color)
+                else : axs[(index+1)*2 - 1].bar(str((elem.sender_ts - startTS)/1000), elem.latency, color = elem.color)
+                totalLatency += elem.latency
+                if elem.sender_jitter == None :
+                    elem.setSenderJitter(0)
+                if sharex : axs[(index+1)*2].bar((elem.sender_ts - startTS)/1000, elem.sender_jitter, color = elem.color)
+                else : axs[(index+1)*2].bar(str((elem.sender_ts - startTS)/1000), elem.sender_jitter, color = elem.color)
+                if elem.sender_jitter > 100 and maxheight < 0 :
+                    totalJitter += 100
+                else : 
+                    totalJitter += elem.sender_jitter
                 
         if not cpulog : axs[-1].set_xlabel('Time in seconds', fontsize = 12)
         axs[(index+1)*2 - 1].set_ylabel(names[key] + '\nlatency', fontsize = 12)

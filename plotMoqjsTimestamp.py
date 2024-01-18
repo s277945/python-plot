@@ -165,10 +165,13 @@ for row in f:
         cpuTrack[cpuLogCount] = rowData(cpuLogCount, value=float(row[4]), sender_ts=int(row[2]), color=color)
         cpuLogCount += 1
 
-# filter cpu logs with timestamp greater than last packet log sender_ts
-lastTS = data[list(data)[-1]].sender_ts
+# filter cpu logs with timestamp greater than last valid packet log sender_ts
+i = -1
+lastTS = None
+while lastTS is None and cpuLogCount + i > 0 :    
+    lastTS = data[list(data)[i]].sender_ts
+    i = i - 1
 if lastTS is not None : cpuTrack = {k:v for k,v in cpuTrack.items() if (lastTS + 99 > v.sender_ts and v.sender_ts is not None)}
-
 print("Tracks found: " + str(len(tracks)))
 
 additional_axs = 0
@@ -182,19 +185,15 @@ if len(tracks) == 0 :
 elif (len(tracks) == 1) :
     fig, axs = plt.subplots(2 + additional_axs, figsize=(12, 7), sharex = sharex)
     fig.suptitle('moq-js latency test', fontsize = 20)
-    ticks0 = []
+    
     
     totalLatency = 0
     totalJitter = 0
     totalCPU = 0
     for index, key in enumerate(tracks) :    
-        for elem in tracks[key].values() :
-            if(key == 'CPU') :
-                if cpulog : 
-                    if sharex : axs[2].bar((elem.sender_ts - startTS)/1000, elem.value, color = elem.color)
-                    else : axs[2].bar(str((elem.sender_ts - startTS)/1000), elem.value, color = elem.color)
-                    totalCPU += elem.value
-            else :   
+        for elem in tracks[key].values() :             
+            if elem.sender_ts == None : print("Empty sender timestamp value for entry", elem.name, "of track", key)      
+            else : 
                 if sharex : axs[0].bar((elem.sender_ts - startTS)/1000, elem.latency, color = elem.color)
                 else : axs[0].bar(str((elem.sender_ts - startTS)/1000), elem.latency, color = elem.color)
                 totalLatency += elem.latency
@@ -206,6 +205,12 @@ elif (len(tracks) == 1) :
                     totalJitter += 100
                 else : 
                     totalJitter += elem.sender_jitter
+    
+    for elem in cpuTrack.values() :
+        if cpulog : 
+            if sharex : axs[-1].bar((elem.sender_ts - startTS)/1000, elem.value, color = elem.color)
+            else : axs[-1].bar(str((elem.sender_ts - startTS)/1000), elem.value, color = elem.color)
+            totalCPU += elem.value
                 
     axs[0].set_title("All packets")
     for key in names :
@@ -216,9 +221,12 @@ elif (len(tracks) == 1) :
         axs[2].set_ylabel('CPU usage\n(%)', fontsize = 12)
         axs[2].set_xlabel('Time in seconds', fontsize = 12)
     else : axs[1].set_xlabel('Time in seconds', fontsize = 12)
-    props = {"rotation" : 45}
+    props = {"rotation" : 45} # label rotation property
     for ax in axs : 
-        plt.setp(ax.get_xticklabels(), **props)
+        num = round(len(ax.get_xticks()) / 20) # set number of labels to show
+        if num == 0 : num = 1        
+        ax.set_xticks(ax.get_xticks()[::num])
+        plt.setp(ax.get_xticklabels(), **props) # apply label rotation property
     bottom, top = axs[0].get_ylim()
     ylen = top - bottom 
     if maxheight > 0 and ylen > maxheight : 
@@ -235,7 +243,6 @@ else :
     fig, axs = plt.subplots(len(tracks)*2 + 1 + additional_axs, figsize=(14, 9), sharex = sharex)
     fig.suptitle('moq-js latency test', fontsize = 20)
     
-    ticks0 = []    
     totalLatency = 0
     totalCPU = 0
     
@@ -261,8 +268,9 @@ else :
     for index, key in enumerate(tracks) : 
         totalLatency = 0
         totalJitter = 0
-        for elem in tracks[key].values() : 
-            if elem.sender_ts is not None :  
+        for elem in tracks[key].values() :      
+            if elem.sender_ts == None : print("Empty sender timestamp value for entry", elem.name, "of track", key)      
+            else :      
                 if sharex : axs[(index+1)*2 - 1].bar((elem.sender_ts - startTS)/1000, elem.latency, color = elem.color)
                 else : axs[(index+1)*2 - 1].bar(str((elem.sender_ts - startTS)/1000), elem.latency, color = elem.color)
                 totalLatency += elem.latency
@@ -297,6 +305,7 @@ else :
         ylen = top - bottom 
         if maxheight < 0 and (totalJitter * 1.9 / len(data)) > 10 : 
             axs[(index+1)*2].set_ylim(0, totalJitter / len(tracks[key]))
+        else : axs[(index+1)*2].set_ylim(0, 10)
     
     for elem in cpuTrack.values() :
         if cpulog : 

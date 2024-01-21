@@ -64,6 +64,7 @@ argParser.add_argument('-sks', '--skipstart', required=False)
 argParser.add_argument('-mh', '--maxheight', required=False)
 argParser.add_argument('-cpu', '--cpulog', required=False)
 argParser.add_argument('-shx', '--sharex', required=False)
+argParser.add_argument('-lsl', '--logslow', required=False)
 args = argParser.parse_args()
 
 if args.file is not None and args.file != "" :
@@ -80,21 +81,26 @@ if args.skipstart is not None :
     if skip < 0 or math.isnan(skip) :
         skip = 0
 maxheight = 0
-if args.maxheight is not None :    
-    if type(args.maxheight) != int :
+if args.maxheight is not None : 
+    if type(args.maxheight) != int :   
         if str(args.maxheight) == 'auto' :
             maxheight = -1
+        else :
+            maxheight = int(args.maxheight)
+            if maxheight < 0 or math.isnan(maxheight) : 
+                maxheight = 0
     else :
         maxheight = int(args.maxheight)
-        if maxheight < 0 : 
+        if maxheight < 0 or maxheight : 
             maxheight = 0
 cpulog = False
-if args.cpulog == 'true' : 
-    cpulog = True
+if args.cpulog == 'true' : cpulog = True
 
 sharex = False       
-if args.sharex == 'true' : 
-    sharex = True 
+if args.sharex == 'true' : sharex = True 
+    
+logSlow = False
+if args.logslow == 'true': logSlow = True
    
 audio_row = -1
 video_row = -1
@@ -140,7 +146,7 @@ for row in f:
                 if name in data and int(data[name].getLatency()) > 35  :
                     data[name].setColor((0.8, 0.1, 0.1, 1))
                     tracks[row[0]][row[2]].setColor((0.8, 0.1, 0.1, 1))
-        elif(row[3] == 'too slow' and not skipping) :
+        elif(row[3] == 'too slow' and not skipping and logSlow) :
             # change item color if too slow packet
             if name in data : 
                 data[name].setColor((0.6, 0.0, 0.4, 1)) 

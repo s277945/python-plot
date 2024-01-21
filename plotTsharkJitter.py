@@ -27,6 +27,7 @@ argParser = argparse.ArgumentParser(prog='plotTsharkJitter.py',
 argParser.add_argument('-f', '--file', required=False)
 argParser.add_argument('-sks', '--skipstart', required=False)
 argParser.add_argument('-mh', '--maxheight', required=False)
+argParser.add_argument('-m', '--mode', required=False)
 args = argParser.parse_args()
 
 if args.file is not None and args.file != "" :
@@ -50,6 +51,10 @@ if args.maxheight is not None :
         maxheight = int(args.maxheight)
         if maxheight < 0 : 
             maxheight = 0
+mode = 0
+if args.mode is not None :    
+    if str(args.mode) == 'delta' :
+        mode = 1
 
 def getIndex(li,target): 
     for index, x in enumerate(li): 
@@ -80,6 +85,8 @@ for row in f:
         if(rowdata < min) :
             min = rowdata
         avg += rowdata
+data.popitem()
+data.popitem() #remove last two values, usually skewed
 avg /= len(data)
         
 
@@ -89,14 +96,19 @@ print("Minimum packet delta:", min)
 print("Average packet delta:", '%.2f'%(avg))
 
 fig, axs = plt.subplots(1, figsize=(12, 6))
-fig.suptitle('Relay, time difference between packets', fontsize = 20)
+if mode == 1 : fig.suptitle('Relay, time difference between packets', fontsize = 20)
+else : fig.suptitle('Relay, packet jitter', fontsize = 20)
 
 
 totalDelta = 0
-for key, elem in data.items() :     
-    axs.bar(elem.name, elem.delta, color = elem.color)
+lastDelta = next(iter(data.values())).delta
+for key, elem in data.items() :   
+    if mode == 1 : axs.bar(elem.name, elem.delta, color = elem.color)  
+    else : axs.bar(elem.name, abs(elem.delta - lastDelta), color = elem.color)    
     totalDelta += elem.delta
-axs.set_ylabel('Time delta \n(ms)', fontsize = 12)
+    lastDelta = elem.delta
+if mode == 1 : axs.set_ylabel('Time delta \n(ms)', fontsize = 12)
+else : axs.set_ylabel('Jitter \n(ms)', fontsize = 12)
 axs.set_xlabel('Object sequence number', fontsize = 12)
 num = round(len(axs.get_xticks()) / 10)
 axs.set_xticks(axs.get_xticks()[::num])

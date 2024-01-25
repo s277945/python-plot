@@ -6,9 +6,10 @@ import numpy as np
 import argparse
 
 class rowData :
-    def __init__(self, name, latency=None, sender_ts=None, receiver_ts=None, sender_jitter=None, receiver_jitter=None, value=None, slow=None, old=None):
-        self.name = name
+    def __init__(self, id, track=None, latency=None, sender_ts=None, receiver_ts=None, sender_jitter=None, receiver_jitter=None, value=None, slow=None, old=None):
+        self.id = id
         self.sender_ts = sender_ts
+        self.track = track
         self.receiver_ts = receiver_ts
         self.sender_jitter = sender_jitter
         self.receiver_jitter = receiver_jitter
@@ -21,8 +22,10 @@ class rowData :
             self.latency = latency
         else :
             self.latency = 0
-    def getName(self):
-        return self.name
+    def getTrack(self):
+        return self.track
+    def getId(self):
+        return self.id
     def getSenderTS(self):
         return self.sender_ts
     def setSenderTS(self, sender_ts):
@@ -84,11 +87,11 @@ else :
 f = open(filename,'r') 
 fNameNoExtension = filename[:len(filename)-4]
 
-audio = False
-if args.audio == 'true': audio = True
+audio = True
+if args.audio == 'false': audio = False
 
-video = False
-if args.video == 'true': video = True
+video = True
+if args.video == 'false': video = False
 
 if (not audio) and (not video) : 
     print("No tracks selected")
@@ -128,7 +131,7 @@ if args.logslow == 'true': logSlow = True
 
 separateTracks = False
 if args.separatetracks == 'true': 
-    separatetracks = True
+    separateTracks = True
     audioFileName = fNameNoExtension + "_audio_converted.txt"
     videoFileName = fNameNoExtension + "_video_converted.txt"
     print ("Output files path:\nAudio:", audioFileName, "\nVideo:", videoFileName)
@@ -159,35 +162,33 @@ for row in f:
                 if(row[3] == 'sent') :
                     if startTS == 0 : 
                         startTS  = int(row[4])
-                    if name in data :
-                        if separateTracks : data[name].setSenderTS(int(row[4]))
-                        else : tracks[row[0]][row[2]].setSenderTS(int(row[4]))
+                    if not separateTracks :
+                        if name in data : data[name].setSenderTS(int(row[4]))
+                        else : data[name] = rowData(row[2], track = row[0], sender_ts = int(row[4]))
                     else :
-                        if separateTracks : data[name] = rowData(row[0] + "-" + row[2], sender_ts=int(row[4]))
-                        else : tracks[row[0]][row[2]] = rowData(row[2], sender_ts=int(row[4]))
+                        if row[2] in tracks[row[0]].keys() : tracks[row[0]][row[2]].setSenderTS(int(row[4]))
+                        else : tracks[row[0]][row[2]] = rowData(row[2], sender_ts = int(row[4]))
                     if(5 < len(row) and row[5].isnumeric()) :
-                        if separateTracks : data[name].setSenderJitter(int(row[5]))
+                        if not separateTracks : data[name].setSenderJitter(int(row[5]))
                         else : tracks[row[0]][row[2]].setSenderJitter(int(row[5]))
                 elif(row[3] == 'received') :
-                    if(name in data) :
-                        if separateTracks : data[name].setReceiverTS(int(row[4]))
-                        else : tracks[row[0]][row[2]].setReceiverTS(int(row[4]))
+                    if not separateTracks :
+                        if name in data : data[name].setReceiverTS(int(row[4]))
+                        else : data[name] = rowData(row[2], track = row[0], receiver_ts = int(row[4]))
                     else :
-                        if separateTracks : data[name] = rowData(row[0] + "-" + row[2], receiver_ts=int(row[4]))
-                        else : tracks[row[0]][row[2]] = rowData(row[2], receiver_ts=int(row[4]))                
+                        if row[2] in tracks[row[0]].keys() : tracks[row[0]][row[2]].setReceiverTS(int(row[4]))
+                        else : tracks[row[0]][row[2]] = rowData(row[2], receiver_ts = int(row[4]))                
                     if(5 < len(row) and row[5].isnumeric()) :
-                        if separateTracks : data[name].seReceiverJitter(int(row[5]))
+                        if not separateTracks : data[name].seReceiverJitter(int(row[5]))
                         else : tracks[row[0]][row[2]].setReceiverJitter(int(row[5]))
         elif(row[3] == 'too slow' and not skipping and logSlow) :
             # change item color if too slow packet
-            if name in data : 
-                if separateTracks : data[name].setSlow(True) 
-                else : tracks[row[0]][row[2]].setSlow(True) 
+            if not separateTracks and name in data : data[name].setSlow(True) 
+            elif row[2] in tracks[row[0]].keys() : tracks[row[0]][row[2]].setSlow(True) 
         elif(row[3] == 'too old'  and not skipping) :
             # change item color if too old packet
-            if name in data : 
-                if separateTracks : data[name].setOld(True) 
-                else : tracks[row[0]][row[2]].setOld(True) 
+            if not separateTracks and name in data : data[name].setOld(True) 
+            elif row[2] in tracks[row[0]].keys() : tracks[row[0]][row[2]].setOld(True) 
         elif(row[3] == 'AUDIO' and audio) :
             names[row[0]] = 'Audio'
             audio_row = row[0]
@@ -195,79 +196,112 @@ for row in f:
             names[row[0]] = 'Video'
             video_row = row[0]
     elif (not skipping) and cpulog and row[3] == 'CPU' :
-        color = (0, 0, 0, 1)
-        if float(row[4]) > 50 :
-            color=(0.6, 0.2, 0.2, 1)
-        else :
-            color=(0.1, 0.1, 0.8, 1)
-        cpuTrack[cpuLogCount] = rowData(cpuLogCount, value=float(row[4]), sender_ts=int(row[2]), color=color)
+        cpuTrack[cpuLogCount] = rowData(cpuLogCount, value=row[4], sender_ts=int(row[2]))
         cpuLogCount += 1
 
 if len(tracks) == 0 and len(cpuLogCount) == 0 :    
     print("No tracks found, program will exit") 
     exit()
 
-# filter cpu logs with timestamp greater than last valid packet log sender_ts
-i = -1
-lastTS = None
-while lastTS is None and cpuLogCount + i > 0 :    
-    lastTS = data[list(data)[i]].sender_ts
-    i = i - 1
-if lastTS is not None : cpuTrack = {k:v for k,v in cpuTrack.items() if (lastTS + 99 > v.sender_ts and v.sender_ts is not None)}
-print("Tracks found: " + str(len(tracks)))
-
 # check which tracks are empty
-if not audio_row in tracks.keys : audio = False
-if not video_row in tracks.keys : video = False
+if audio_row not in tracks.keys() : audio = False
+if video_row not in tracks.keys() : video = False
 
 if separateTracks : 
     if audio :
         faudio = open(audioFileName, "w")
-        faudio.write("Track ID;Object ID;Group ID;Status;Latency;")
-        faudio.write(audio_row + ";-;-;AUDIO;-;")
+        faudio.write("Track ID;Object ID;Group ID;Status;Latency;\n")
+        faudio.write(audio_row + ";-;-;AUDIO;-;\n")
     if video :
         fvideo = open(videoFileName, "w")
-        fvideo.write("Track ID;Object ID;Group ID;Status;Latency;")
-        fvideo.write(video_row + ";-;-;VIDEO;-;")
+        fvideo.write("Track ID;Object ID;Group ID;Status;Latency;\n")
+        fvideo.write(video_row + ";-;-;VIDEO;-;\n")
 else :
     fout = open(filenameConverted, "w")
-    fout.write("Track ID;Object ID;Group ID;Status;Latency;")
-    if audio : fout.write(audio_row + ";-;-;AUDIO;-;")
-    if video : fout.write(video_row + ";-;-;VIDEO;-;")
+    fout.write("Track ID;Object ID;Group ID;Status;Latency;\n")
+    if audio : fout.write(audio_row + ";-;-;AUDIO;-;\n")
+    if video : fout.write(video_row + ";-;-;VIDEO;-;\n")
+
 
 totalLatency = 0
 totalJitter = 0
 totalCPU = 0
-for index, key in enumerate(tracks) :    
-    for elem in tracks[key].values() :             
-        if elem.sender_ts == None : 
-            print("Empty sender timestamp value for entry", elem.name, "of track", key)    
-        else :   
-            if separateTracks : 
-                if key == audio_row :
-                    faudio.write()
-                elif key == video_row : 
-                    fvideo.write()
-            else : fout.write()
-            if sharex : axs[0].bar((elem.sender_ts - startTS)/1000, elem.latency, color = elem.color)
-            else : axs[0].bar(str((elem.sender_ts - startTS)/1000), elem.latency, color = elem.color)
-            totalLatency += elem.latency
-            if elem.sender_jitter == None :
-                elem.setSenderJitter(0)
-            if sharex : axs[1].bar((elem.sender_ts - startTS)/1000, elem.sender_jitter, color = elem.color)
-            else : axs[1].bar(str((elem.sender_ts - startTS)/1000), elem.sender_jitter, color = elem.color)
-            if elem.sender_jitter > 100 and maxlatency < 0 :
-                totalJitter += 100
-            else : 
-                totalJitter += elem.sender_jitter
+# if separate files for audio and video
+if separateTracks : 
+    if audio : 
+        totalAudioLatency = 0
+        totalAudioJitter = 0
+    if video :
+        totalVideoLatency = 0
+        totalVideoJitter = 0    
+    for index, key in enumerate(tracks) :   
+        # set file variable to write to according to track type
+        if key == audio_row and audio : fout = faudio
+        elif key == video_row and video : fout = fvideo
+        # read track, write file
+        if (key == audio_row and audio) or (key == video_row and video) :            
+            for elem in tracks[key].values() :    
+                if elem.sender_ts == None : 
+                    None
+                    # print("Empty sender timestamp value for entry", elem.id, "of track", key, ":",  elem.sender_ts)    
+                else :                   
+                    if elem.sender_jitter == None :
+                        elem.setSenderJitter(0)
+                    fout.write(str(key) + ";0;" + str(elem.id) + ";sent;" + str(elem.sender_ts) + ";" + str(elem.sender_jitter) + "\n")
+                    fout.write(str(key) + ";0;" + str(elem.id) + ";received;" + str(elem.receiver_ts) + "\n")
+                    if elem.slow : fout.write(str(key) + ";0;" + str(elem.id) + ";too slow;" + str(elem.receiver_ts) + "\n")
+                    if elem.old : fout.write(str(key) + ";0;" + str(elem.id) + ";too old;" + str(elem.receiver_ts) + "\n")
+                    totalLatency += elem.latency
+                    if elem.sender_jitter > 100 and maxlatency < 0 :
+                        totalJitter += 100
+                    else : 
+                        totalJitter += elem.sender_jitter   
+                    if key == audio_row :
+                        totalAudioLatency += elem.latency
+                        totalAudioJitter += elem.sender_jitter
+                    elif key == video_row :
+                        totalVideoLatency += elem.latency
+                        totalVideoJitter += elem.sender_jitter
+else : 
+    # read track, write file
+    for elem_id, elem in data.items() :             
+            if elem.sender_ts == None : 
+                print("Empty sender timestamp value for entry", elem.id, "of track", elem_id)    
+            else :                   
+                if elem.sender_jitter == None :
+                    elem.setSenderJitter(0)
+                fout.write(str(elem.id) + ";0;" + str(elem.id) + ";sent;" + str(elem.sender_ts) + ";" + str(elem.sender_jitter) + "\n")
+                fout.write(str(elem.id) + ";0;" + str(elem.id) + ";received;" + str(elem.receiver_ts) + "\n")
+                if elem.slow : fout.write(str(elem.id) + ";0;" + str(elem.id) + ";too slow;" + str(elem.receiver_ts) + "\n")
+                if elem.old : fout.write(str(elem.id) + ";0;" + str(elem.id) + ";too old;" + str(elem.receiver_ts) + "\n")
+                totalLatency += elem.latency
+                if elem.sender_jitter > 100 and maxlatency < 0 :
+                    totalJitter += 100
+                else : 
+                    totalJitter += elem.sender_jitter
 
 for elem in cpuTrack.values() :
     if cpulog : 
-        if sharex : axs[-1].bar((elem.sender_ts - startTS)/1000, elem.value, color = elem.color)
-        else : axs[-1].bar(str((elem.sender_ts - startTS)/1000), elem.value, color = elem.color)
+        if separateTracks :
+            if audio : faudio.write("-;-;" + str(elem.sender_ts) + ";CPU;" + str(elem.value) + "\n")
+            if video : fvideo.write("-;-;" + str(elem.sender_ts) + ";CPU;" + str(elem.value) + "\n")
+        else :
+            fout.write("-;-;" + str(elem.sender_ts) + ";CPU;" + str(elem.value) + "\n")
         totalCPU += elem.value
-
-# print("Average latency", totalLatency/totalNum)         
-# if audio : print("Average latency", totalLatency) 
-# if video : print("Average latency", totalLatency)
+ 
+if separateTracks : 
+    if audio : 
+        faudio.close()
+        print("Average audio latency", totalAudioLatency/len(tracks[audio_row]))
+        print("Average audio jitter", totalAudioJitter/len(tracks[audio_row])) 
+    if video : 
+        fvideo.close()      
+        print("Average video latency", totalVideoLatency/len(tracks[video_row]))
+        print("Average video jitter", totalVideoJitter/len(tracks[video_row]))
+else : 
+    fout.close()
+    entries = len(data)
+    if(entries > 0) :
+        print("Average latency", totalLatency/len(data)) 
+        print("Average jitter", totalJitter/len(data))          
     

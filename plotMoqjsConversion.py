@@ -71,7 +71,6 @@ argParser = argparse.ArgumentParser(prog='plotMoqjsTimestamp.py',
 argParser.add_argument('-f', '--file', required=False)
 argParser.add_argument('-sks', '--skipstart', required=False)
 argParser.add_argument('-ske', '--skipend', required=False)
-argParser.add_argument('-ml', '--maxlatency', required=False)
 argParser.add_argument('-cpu', '--cpulog', required=False)
 argParser.add_argument('-lsl', '--logslow', required=False)
 argParser.add_argument('-st', '--separatetracks', required=False)
@@ -108,20 +107,6 @@ if args.skipend is not None :
     skipend = int(args.skipend)
     if skipend < 0 or math.isnan(skipend) :
         skipend = sys.maxsize 
-        
-maxlatency = 0
-if args.maxlatency is not None : 
-    if type(args.maxlatency) != int :   
-        if str(args.maxlatency) == 'auto' :
-            maxlatency = -1
-        else :
-            maxlatency = int(args.maxlatency)
-            if maxlatency < 0 or math.isnan(maxlatency) : 
-                maxlatency = 0
-    else :
-        maxlatency = int(args.maxlatency)
-        if maxlatency < 0 or maxlatency : 
-            maxlatency = 0
             
 cpulog = False
 if args.cpulog == 'true' : cpulog = True
@@ -252,10 +237,7 @@ if separateTracks :
                     if elem.slow : fout.write(str(key) + ";0;" + str(elem.id) + ";too slow;" + str(elem.receiver_ts) + "\n")
                     if elem.old : fout.write(str(key) + ";0;" + str(elem.id) + ";too old;" + str(elem.receiver_ts) + "\n")
                     totalLatency += elem.latency
-                    if elem.sender_jitter > 100 and maxlatency < 0 :
-                        totalJitter += 100
-                    else : 
-                        totalJitter += elem.sender_jitter   
+                    totalJitter += elem.sender_jitter   
                     if key == audio_row :
                         totalAudioLatency += elem.latency
                         totalAudioJitter += elem.sender_jitter
@@ -275,10 +257,7 @@ else :
                 if elem.slow : fout.write(str(elem.id) + ";0;" + str(elem.id) + ";too slow;" + str(elem.receiver_ts) + "\n")
                 if elem.old : fout.write(str(elem.id) + ";0;" + str(elem.id) + ";too old;" + str(elem.receiver_ts) + "\n")
                 totalLatency += elem.latency
-                if elem.sender_jitter > 100 and maxlatency < 0 :
-                    totalJitter += 100
-                else : 
-                    totalJitter += elem.sender_jitter
+                totalJitter += elem.sender_jitter
 
 for elem in cpuTrack.values() :
     if cpulog : 

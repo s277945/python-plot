@@ -6,14 +6,16 @@ import numpy as np
 import argparse
 
 class rowData :
-    def __init__(self, id, track=None, latency=None, sender_ts=None, receiver_ts=None, sender_jitter=None, receiver_jitter=None, value=None, slow=None, old=None):
-        self.id = id
+    def __init__(self, group, object=0, track=None, latency=None, sender_ts=None, receiver_ts=None, sender_jitter=None, receiver_jitter=None, value=None, slow=None, old=None):
+        self.group = group
+        self.object = object
         self.sender_ts = sender_ts
         self.track = track
         self.receiver_ts = receiver_ts
         self.sender_jitter = sender_jitter
         self.receiver_jitter = receiver_jitter
-        self.value = value
+        if value is not None : self.value = float(value)
+        else : self.value = None
         self.slow = slow
         self.old = old
         if (sender_ts is not None and receiver_ts is not None and receiver_ts > sender_ts) : 
@@ -73,6 +75,7 @@ argParser.add_argument('-sks', '--skipstart', required=False)
 argParser.add_argument('-ske', '--skipend', required=False)
 argParser.add_argument('-cpu', '--cpulog', required=False)
 argParser.add_argument('-lsl', '--logslow', required=False)
+argParser.add_argument('-phd', '--pheader', required=False)
 argParser.add_argument('-st', '--separatetracks', required=False)
 argParser.add_argument('-a', '--audio', required=False)
 argParser.add_argument('-v', '--video', required=False)
@@ -114,6 +117,9 @@ if args.cpulog == 'true' : cpulog = True
 logSlow = False
 if args.logslow == 'true': logSlow = True
 
+header = 'false'
+if args.pheader is not None : header = args.pheader
+
 separateTracks = False
 if args.separatetracks == 'true': 
     separateTracks = True
@@ -129,17 +135,18 @@ video_row = -1
 skipping = True 
 cpuLogCount = 0
 startTS = 0
+packetCount = 0
 for row in f: 
     row = row.strip('\n').split(';') 
     # print(row)
-    if(row[0].isnumeric()) :      
-        name = row[0] + "-" + row[2] 
+    if(row[0].isnumeric()) :    
+        name = row[0] + "-" + row[1] + "-" + row[2]
         # if row has track id and latency value
-        if(4 < len(row) and row[4].isnumeric() and int(row[2]) > 0) :     
-            if int(row[2]) > skip and int(row[2]) <= skipend :
+        if(4 < len(row) and row[4].isnumeric() and int(row[2]) > 0) and row[1].isnumeric() and (header == 'true' or (header == 'false' and int(row[1]) > 0) or (header == 'only' and int(row[1]) == 0)) :     
+            if packetCount > skip and packetCount <= skipend :
                 skipping = False   
             else : skipping = True
-            if (not skipping) and ((audio_row == row[0] and int(row[2]) > skip and audio == True) or (video_row == row[0] and int(row[2]) > skip) and video == True) :           
+            if (not skipping) and (((audio_row == row[0] and audio == True and packetCount >= skip) or (video_row == row[0] and video == True and (audio == True or (audio == False and packetCount >= skip))))) :           
                 # add track to track array if not present and the received packet data to the individual track data array
                 # add row data (received packet data) to general data array
                 if row[0] not in tracks :
@@ -149,31 +156,32 @@ for row in f:
                         startTS  = int(row[4])
                     if not separateTracks :
                         if name in data : data[name].setSenderTS(int(row[4]))
-                        else : data[name] = rowData(row[2], track = row[0], sender_ts = int(row[4]))
+                        else : data[name] = rowData(object = row[1], group = row[2], track = row[0], sender_ts = int(row[4]))
                     else :
-                        if row[2] in tracks[row[0]].keys() : tracks[row[0]][row[2]].setSenderTS(int(row[4]))
-                        else : tracks[row[0]][row[2]] = rowData(row[2], sender_ts = int(row[4]))
+                        if (row[1] + "-" + row[2]) in tracks[row[0]].keys() : tracks[row[0]][row[1] + "-" + row[2]].setSenderTS(int(row[4]))
+                        else : tracks[row[0]][row[1] + "-" + row[2]] = rowData(object = row[1], group = row[2], sender_ts = int(row[4]))
                     if(5 < len(row) and row[5].isnumeric()) :
                         if not separateTracks : data[name].setSenderJitter(int(row[5]))
-                        else : tracks[row[0]][row[2]].setSenderJitter(int(row[5]))
+                        else : tracks[row[0]][row[1] + "-" + row[2]].setSenderJitter(int(row[5]))
                 elif(row[3] == 'received') :
                     if not separateTracks :
                         if name in data : data[name].setReceiverTS(int(row[4]))
-                        else : data[name] = rowData(row[2], track = row[0], receiver_ts = int(row[4]))
+                        else : data[name] = rowData(object = row[1], group = row[2], track = row[0], receiver_ts = int(row[4]))
                     else :
-                        if row[2] in tracks[row[0]].keys() : tracks[row[0]][row[2]].setReceiverTS(int(row[4]))
-                        else : tracks[row[0]][row[2]] = rowData(row[2], receiver_ts = int(row[4]))                
+                        if (row[1] + "-" + row[2]) in tracks[row[0]].keys() : tracks[row[0]][row[1] + "-" + row[2]].setReceiverTS(int(row[4]))
+                        else : tracks[row[0]][row[1] + "-" + row[2]] = rowData(object = row[1], group = row[2], receiver_ts = int(row[4]))                
                     if(5 < len(row) and row[5].isnumeric()) :
                         if not separateTracks : data[name].seReceiverJitter(int(row[5]))
-                        else : tracks[row[0]][row[2]].setReceiverJitter(int(row[5]))
+                        else : tracks[row[0]][row[1] + "-" + row[2]].setReceiverJitter(int(row[5]))
+            if (audio_row == row[0] and audio == True) or (audio == False and video_row == row[0] and video == True) : packetCount += 1
         elif(row[3] == 'too slow' and not skipping and logSlow) :
             # change item color if too slow packet
             if not separateTracks and name in data : data[name].setSlow(True) 
-            elif row[2] in tracks[row[0]].keys() : tracks[row[0]][row[2]].setSlow(True) 
+            elif (row[1] + "-" + row[2]) in tracks[row[0]].keys() : tracks[row[0]][row[1] + "-" + row[2]].setSlow(True) 
         elif(row[3] == 'too old'  and not skipping) :
             # change item color if too old packet
             if not separateTracks and name in data : data[name].setOld(True) 
-            elif row[2] in tracks[row[0]].keys() : tracks[row[0]][row[2]].setOld(True) 
+            elif (row[1] + "-" + row[2]) in tracks[row[0]].keys() : tracks[row[0]][row[1] + "-" + row[2]].setOld(True) 
         elif(row[3] == 'AUDIO' and audio) :
             names[row[0]] = 'Audio'
             audio_row = row[0]
@@ -232,10 +240,10 @@ if separateTracks :
                 else :                   
                     if elem.sender_jitter == None :
                         elem.setSenderJitter(0)
-                    fout.write(str(key) + ";0;" + str(elem.id) + ";sent;" + str(elem.sender_ts) + ";" + str(elem.sender_jitter) + "\n")
-                    fout.write(str(key) + ";0;" + str(elem.id) + ";received;" + str(elem.receiver_ts) + "\n")
-                    if elem.slow : fout.write(str(key) + ";0;" + str(elem.id) + ";too slow;" + str(elem.receiver_ts) + "\n")
-                    if elem.old : fout.write(str(key) + ";0;" + str(elem.id) + ";too old;" + str(elem.receiver_ts) + "\n")
+                    fout.write(str(key) + ";" + str(elem.object) + ";" + str(elem.group) + ";sent;" + str(elem.sender_ts) + ";" + str(elem.sender_jitter) + "\n")
+                    fout.write(str(key) + ";" + str(elem.object) + ";" + str(elem.group) + ";received;" + str(elem.receiver_ts) + "\n")
+                    if elem.slow : fout.write(str(key) + ";" + str(elem.object) + ";" + str(elem.group) + ";too slow;" + str(elem.receiver_ts) + "\n")
+                    if elem.old : fout.write(str(key) + ";" + str(elem.object) + ";" + str(elem.group) + ";too old;" + str(elem.receiver_ts) + "\n")
                     totalLatency += elem.latency
                     totalJitter += elem.sender_jitter   
                     if key == audio_row :
@@ -252,10 +260,10 @@ else :
             else :                   
                 if elem.sender_jitter == None :
                     elem.setSenderJitter(0)
-                fout.write(str(elem.id) + ";0;" + str(elem.id) + ";sent;" + str(elem.sender_ts) + ";" + str(elem.sender_jitter) + "\n")
-                fout.write(str(elem.id) + ";0;" + str(elem.id) + ";received;" + str(elem.receiver_ts) + "\n")
-                if elem.slow : fout.write(str(elem.id) + ";0;" + str(elem.id) + ";too slow;" + str(elem.receiver_ts) + "\n")
-                if elem.old : fout.write(str(elem.id) + ";0;" + str(elem.id) + ";too old;" + str(elem.receiver_ts) + "\n")
+                fout.write(str(elem.id) + ";" + str(elem.object) + ";" + str(elem.group) + ";sent;" + str(elem.sender_ts) + ";" + str(elem.sender_jitter) + "\n")
+                fout.write(str(elem.id) + ";" + str(elem.object) + ";" + str(elem.group) + ";received;" + str(elem.receiver_ts) + "\n")
+                if elem.slow : fout.write(str(elem.id) + ";" + str(elem.object) + ";" + str(elem.group) + ";too slow;" + str(elem.receiver_ts) + "\n")
+                if elem.old : fout.write(str(elem.id) + ";" + str(elem.object) + ";" + str(elem.group) + ";too old;" + str(elem.receiver_ts) + "\n")
                 totalLatency += elem.latency
                 totalJitter += elem.sender_jitter
 

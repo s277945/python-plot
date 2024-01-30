@@ -1,5 +1,6 @@
 
 import math
+import sys
 import matplotlib.pyplot as plt 
 import numpy as np
 import argparse
@@ -61,6 +62,7 @@ argParser = argparse.ArgumentParser(prog='plotMoqjsTimestamp.py',
                     epilog='By Alessandro Bottisio')
 argParser.add_argument('-f', '--file', required=False)
 argParser.add_argument('-sks', '--skipstart', required=False)
+argParser.add_argument('-ske', '--skipend', required=False)
 argParser.add_argument('-mh', '--maxheight', required=False)
 argParser.add_argument('-cpu', '--cpulog', required=False)
 argParser.add_argument('-shx', '--sharex', required=False)
@@ -81,6 +83,14 @@ if args.skipstart is not None :
     skip = int(args.skipstart)
     if skip < 0 or math.isnan(skip) :
         skip = 0
+              
+skipend = sys.maxsize
+if args.skipend is not None :    
+    skipend = int(args.skipend)
+    if skipend < 0 or math.isnan(skipend) :
+        skipend = sys.maxsize 
+            
+
 maxheight = 0
 if args.maxheight is not None : 
     if type(args.maxheight) != int :   
@@ -111,6 +121,7 @@ video_row = -1
 skipping = True 
 cpuLogCount = 0
 startTS = 0
+packetCount = 0
 for row in f: 
     row = row.strip('\n').split(';') 
     # print(row)
@@ -119,9 +130,10 @@ for row in f:
         name = row[0] + "-" + row[1] + "-" + row[2]
         # if row has track id and latency value
         if 4 < len(row) and row[4].isnumeric() and int(row[2]) > 0 and row[1].isnumeric() and (header == 'true' or (header == 'false' and int(row[1]) > 0) or (header == 'only' and int(row[1]) == 0)) :    
-            if int(row[2]) >= skip :
+            if packetCount >= skip and packetCount <= skipend :
                 skipping = False   
-            if (not skipping) and ((audio_row == row[0] and (int(row[1]) + 1) * int(row[2]) >= skip) or video_row == row[0]) :            
+            else : skipping = True
+            if (not skipping) and ((audio_row == row[0] and packetCount >= skip) or (video_row == row[0] and (int(audio_row) > 0 or (int(audio_row) < 0 and packetCount >= skip)))) :            
                 # add track to track array if not present and the received packet data to the individual track data array
                 # add row data (received packet data) to general data array
                 if row[0] not in tracks :
@@ -150,7 +162,8 @@ for row in f:
                         tracks[row[0]][row[1] + "-" + row[2]].setReceiverJitter(int(row[5]))
                 if name in data and int(data[name].getLatency()) > 35  :
                     data[name].setColor((0.8, 0.1, 0.1, 1))
-                    tracks[row[0]][row[1] + "-" + row[2]].setColor((0.8, 0.1, 0.1, 1))
+                    tracks[row[0]][row[1] + "-" + row[2]].setColor((0.8, 0.1, 0.1, 1))                
+            if (audio_row == row[0] and int(audio_row) > 0) or (video_row == row[0] and int(video_row) < 0 and int(audio_row) > 0) : packetCount += 1
         elif(row[3] == 'too slow' and not skipping and logSlow) :
             # change item color if too slow packet
             if name in data : 

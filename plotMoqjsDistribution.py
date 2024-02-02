@@ -23,7 +23,7 @@ class rowData :
         elif (latency is not None) : 
             self.latency = int(latency)
         else :
-            self.latency = 0
+            self.latency = None
     def getSenderTS(self):
         return self.sender_ts
     def setSenderTS(self, sender_ts):
@@ -71,6 +71,10 @@ def getJitters(entry: rowData):
 
 def getValues(entry: rowData):
   return entry.value
+
+def checkValidInt(number: int):
+    if number is None : return False  
+    return number >= 0
 
 data = {}
 tracks = {}
@@ -233,7 +237,7 @@ binsList = []
 
 if int(audio_row) > 0 and int(video_row) > 0 :
     if type == 'latency' or type == 'all' : 
-        dataLatencyValues = list(map(getLatencies, data.values()))
+        dataLatencyValues = list(filter(checkValidInt, map(getLatencies, data.values())))
         plotData.append(dataLatencyValues)
         labels.append("Fragments latency distribution")        
         _, FD_bins = np.histogram(dataLatencyValues, bins="fd")
@@ -241,7 +245,7 @@ if int(audio_row) > 0 and int(video_row) > 0 :
         totalLatency = functools.reduce(lambda a, b: int(a)+int(b), dataLatencyValues)  
         total_axs += 1
     if type == 'jitter' or type == 'all' : 
-        dataJitterValues = list(map(getJitters, data.values()))
+        dataJitterValues = list(filter(checkValidInt, map(getJitters, data.values())))
         plotData.append(dataJitterValues)
         labels.append("Fragments jitter distribution")
         _, FD_bins = np.histogram(dataJitterValues, bins="fd")
@@ -251,7 +255,7 @@ if int(audio_row) > 0 and int(video_row) > 0 :
 for index, key in enumerate(tracks) :   
     if int(audio_row) > 0 and key == audio_row :
         if type == 'latency' or type == 'all' : 
-            audioTrackLatencyValues = list(map(getLatencies, tracks[key].values()))
+            audioTrackLatencyValues = list(filter(checkValidInt, map(getLatencies, tracks[key].values())))
             plotData.append(audioTrackLatencyValues)
             labels.append("Audio fragments latency distribution")   
             _, FD_bins = np.histogram(audioTrackLatencyValues, bins="fd")
@@ -259,7 +263,7 @@ for index, key in enumerate(tracks) :
             totalAudioLatency = functools.reduce(lambda a, b: int(a)+int(b), audioTrackLatencyValues)  
             total_axs += 1
         if type == 'jitter' or type == 'all' : 
-            audioTrackJitterValues = list(map(getJitters, tracks[key].values()))
+            audioTrackJitterValues = list(filter(checkValidInt, map(getJitters, tracks[key].values())))
             plotData.append(audioTrackJitterValues)
             labels.append("Audio fragments jitter distribution")
             _, FD_bins = np.histogram(audioTrackJitterValues, bins="fd")
@@ -268,7 +272,7 @@ for index, key in enumerate(tracks) :
             total_axs += 1
     if int(video_row) > 0 and key == video_row :
         if type == 'latency' or type == 'all' : 
-            videoTrackLatencyValues = list(map(getLatencies, tracks[key].values()))
+            videoTrackLatencyValues = list(filter(checkValidInt, map(getLatencies, tracks[key].values())))
             plotData.append(videoTrackLatencyValues)
             labels.append("Video fragments latency distribution")   
             _, FD_bins = np.histogram(videoTrackLatencyValues, bins="fd")
@@ -276,7 +280,7 @@ for index, key in enumerate(tracks) :
             totalVideoLatency = functools.reduce(lambda a, b: int(a)+int(b), videoTrackLatencyValues)  
             total_axs += 1
         if type == 'jitter' or type == 'all' : 
-            videoTrackJitterValues = list(map(getJitters, tracks[key].values()))
+            videoTrackJitterValues = list(filter(checkValidInt, map(getJitters, tracks[key].values())))
             plotData.append(videoTrackJitterValues)
             labels.append("Video fragments jitter distribution")
             _, FD_bins = np.histogram(videoTrackJitterValues, bins="fd")
@@ -284,7 +288,7 @@ for index, key in enumerate(tracks) :
             totalVideoJitter = functools.reduce(lambda a, b: int(a)+int(b), videoTrackJitterValues)   
             total_axs += 1
 if cpulog : 
-    cpuTrackValues = list(map(lambda a: a.value, cpuTrack.values()))
+    cpuTrackValues = list(filter(checkValidInt, map(lambda a: a.value, cpuTrack.values())))
     plotData.append(cpuTrackValues)
     labels.append("Cpu usage value distribution")
     _, FD_bins = np.histogram(cpuTrackValues, bins="fd")
@@ -296,11 +300,22 @@ fig, axs = plt.subplots(total_axs , figsize=(12, 9.5))
 fig.suptitle('moq-js distribution plot', fontsize = 20)  
 
 
-for index in range(total_axs):
-    # sb.distplot(x = plotData[index]  ,  bins = 20 , kde = True , color = (0, 0.2, 0.8, 1), kde_kws=dict(linewidth = 4 , color = (0.0, 0, 0.4)), ax=axs[index])   
-    sb.histplot(data=plotData[index], bins = binsList[index], stat='probability', alpha=0.4, kde=True, kde_kws={"cut": 3}, ax=axs[index]) 
-    axs[index].set_title(labels[index])
+if total_axs == 1 :
+    sb.histplot(data=plotData[index], bins = binsList[index], stat='probability', alpha=0.4, kde=True, kde_kws={"cut": 3}, ax=axs) 
+    axs.set_title(labels[index])
+    plt.subplots_adjust(left = 0.07, right = 0.975, bottom = 0.045, top = 0.9)
+if total_axs == 2 :
+    for index in range(total_axs):
+        # sb.distplot(x = plotData[index]  ,  bins = 20 , kde = True , color = (0, 0.2, 0.8, 1), kde_kws=dict(linewidth = 4 , color = (0.0, 0, 0.4)), ax=axs[index])   
+        sb.histplot(data=plotData[index], bins = binsList[index], stat='probability', alpha=0.4, kde=True, kde_kws={"cut": 3}, ax=axs[index]) 
+        axs[index].set_title(labels[index])
+    plt.subplots_adjust(left = 0.07, right = 0.975, hspace = 0.25, bottom = 0.045, top = 0.88)
+if total_axs > 2 :
+    for index in range(total_axs):
+        # sb.distplot(x = plotData[index]  ,  bins = 20 , kde = True , color = (0, 0.2, 0.8, 1), kde_kws=dict(linewidth = 4 , color = (0.0, 0, 0.4)), ax=axs[index])   
+        sb.histplot(data=plotData[index], bins = binsList[index], stat='probability', alpha=0.4, kde=True, kde_kws={"cut": 3}, ax=axs[index]) 
+        axs[index].set_title(labels[index])
+    plt.subplots_adjust(left = 0.07, right = 0.975, hspace = 1.2 - 3/total_axs, bottom = 0.045, top = 0.9)
     
 
-plt.subplots_adjust(left = 0.07, right = 0.975, hspace = 1.2 - 3/total_axs, bottom = 0.045, top = 0.9)
 plt.show() 

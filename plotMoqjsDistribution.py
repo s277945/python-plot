@@ -214,7 +214,7 @@ for row in f:
         else :
             color=(0.1, 0.1, 0.8, 1)
         cpuTrack[cpuLogCount] = rowData(cpuLogCount, value=float(row[4]), sender_ts=int(row[2]))
-        print(cpuTrack[cpuLogCount].value)
+        # print(cpuTrack[cpuLogCount].value)
         cpuLogCount += 1
 
 # filter cpu logs with timestamp greater than last valid packet log sender_ts

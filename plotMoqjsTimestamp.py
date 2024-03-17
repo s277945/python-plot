@@ -255,6 +255,7 @@ elif (len(tracks) == 1) :
     ylen = top - bottom 
     if maxheight > 0 and ylen > maxheight : 
         axs[0].set_ylim(0, maxheight)
+        axs[1].set_ylim(0, maxheight/10)
     if maxheight < 0 :
         axs[0].set_ylim(0, totalLatency * 1.9 / len(data))
         

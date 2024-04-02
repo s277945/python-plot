@@ -43,7 +43,10 @@ prevRow = None
 entries = {}
 streams = {}
 for row in f: 
-    if prevRow is not None and "Decrypted QUIC" in prevRow :
+    if "No." in row :
+        quicPackets = []
+        currentQuicPacket = 0
+    elif prevRow is not None and "Decrypted QUIC" in prevRow :
         # print(row)
         row1 = row.split("40 54 00 00 ")
         if len(row1) > 1 :
@@ -59,7 +62,9 @@ for row in f:
                     else : 
                         groupId = int("0x" + data[1] + data[2], 16) - 0x4000
                         objectId = int("0x" + data[3], 16)                
-                if streamId is not None : 
+                if len(quicPackets) > 0 : 
+                    streamId = quicPackets[currentQuicPacket]
+                    currentQuicPacket += 1
                     entries[streamId] = rowData(trackId, groupId, objectId, streamId)
                     if streamId in streams.keys() :
                         entries[streamId].stream = streams[streamId]
@@ -70,6 +75,7 @@ for row in f:
             streamId = int(data[0].replace("STREAM id=", "").strip())
             streamDetails = data[1].split(" ")
             streamOffset = int(streamDetails[1].replace("off=", ""))
+            if streamOffset == 0 : quicPackets.append(streamId)
             pduLength = int(streamDetails[2].replace("len=", ""))
             if streamId not in streams.keys() :
                 stream = {}

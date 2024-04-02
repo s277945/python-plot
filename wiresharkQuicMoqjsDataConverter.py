@@ -2,13 +2,21 @@ import argparse
 from functools import reduce
 
 class rowData :
-    def __init__(self, trackId, groupId, objectId, streamId, ack = 0, pnum = 0):
+    def __init__(self, trackId, groupId, objectId, streamId, ackNum = 0, pNum = 0, stream = None):
         self.trackId = trackId
         self.groupId = groupId
         self.objectId = objectId
         self.streamId = streamId
-        self.ack = ack
-        self.pnum = pnum
+        self.ackNum = ackNum
+        self.pNum = pNum
+        self.stream = stream
+        
+class Range :
+    def __init__(self, offset, length, occurrences) -> None:
+        self.offset = offset
+        self.length = length
+        self.occurrences = occurrences
+        
 
 argParser = argparse.ArgumentParser(prog='plotMoqjsTimestamp.py',
                     description='Program that allows to convert wireshark decrypted quic moq-js data',
@@ -27,6 +35,7 @@ else :
   
 prevRow = None  
 entries = {}
+streams = {}
 for row in f: 
     if prevRow is not None and "Decrypted QUIC" in prevRow :
         # print(row)
@@ -43,20 +52,55 @@ for row in f:
                         objectId = int("0x" + data[2], 16)
                     else : 
                         groupId = int("0x" + data[1] + data[2], 16) - 0x4000
-                        objectId = int("0x" + data[3], 16)
-                if lastStream is not None : entries[lastStream] = rowData(trackId, groupId, objectId, lastStream)
-                print("entry ", trackId, groupId, objectId)
-    elif "Stream ID:" in row :
-        data = row.replace("Stream ID:", "").strip()
-        lastStream = int(data)
-    elif "Largest Acknowledged:" in row :
-        data = row.replace("Largest Acknowledged:", "").strip()
-        lastAck = int(data)
-        if lastAck not in entries.keys() :
-            entries[lastAck] = True
-        else : 
-            data = entries[lastAck]
-            if isinstance(data, rowData) : data.ack = True
-                     
+                        objectId = int("0x" + data[3], 16)                
+                if streamId is not None : 
+                    entries[streamId] = rowData(trackId, groupId, objectId, streamId)
+                    if streamId in streams.keys() :
+                        entries[streamId].stream = streams[streamId]
+                        
+    elif "STREAM id" in row : 
+        data = row.split("fin=")
+        if len(data) >= 1 :
+            streamId = int(data[0].replace("STREAM id=", "").strip())
+            streamDetails = data[1].split(" ")
+            streamOffset = int(streamDetails[1].replace("off=", ""))
+            pduLength = int(streamDetails[2].replace("len=", ""))
+            if streamId not in streams.keys() :
+                stream = {}
+                streams[streamId] = stream
+            else :
+                stream = streams[streamId]
+            if streamOffset in stream.keys() :
+                stream[streamOffset].occurrences += 1
+            else : 
+                stream[streamOffset] = Range(streamOffset, pduLength, 1)
+                if streamId in entries.keys() :
+                    entries[streamId].stream = stream
+                  
     prevRow = row
-    
+
+for key in sorted(entries) : 
+    data = entries[key]
+    if isinstance(data, rowData) : 
+        stream = data.stream
+        for offset in stream :
+            data.pNum += stream[offset].occurrences - 1
+
+f = open(filename + "_converted",'w') 
+f.write("Track ID;Object ID;Group ID;SreamId;ACKs;Number of retransmissions;\n")
+for key in sorted(entries) : 
+    data = entries[key]
+    if isinstance(data, rowData) : 
+        print(data.trackId, data.objectId, data.groupId, data.streamId, data.ackNum, data.pNum)
+        f.write(str(data.trackId) + ";" + 
+                str(data.objectId) + ";" + 
+                str(data.groupId) + ";" + 
+                str(data.streamId) + ";" + 
+                str(data.ackNum) + ";" + 
+                str(data.pNum) + 
+                ";\n")
+    else : 
+        print(key, data)
+        f.write("/;/;/;" + 
+                data + 
+                ";1;/;\n")

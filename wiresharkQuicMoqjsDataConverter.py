@@ -22,7 +22,8 @@ argParser = argparse.ArgumentParser(prog='plotMoqjsTimestamp.py',
                     description='Program that allows to convert wireshark decrypted quic moq-js data',
                     epilog='By Alessandro Bottisio')
 
-argParser.add_argument('-f', '--file', required=False)
+argParser.add_argument('-f', '--file', required=True)
+argParser.add_argument('-sa', '--showAll', required=False)
 args = argParser.parse_args()
 
 if args.file is not None and args.file != "" :
@@ -32,7 +33,12 @@ if args.file is not None and args.file != "" :
 else :
     print("Opening moq-js log file", 'log.txt')
     f = open('log.txt','r')
-  
+
+if args.showAll is not None and args.showAll == "true": 
+    showAll = True
+else : 
+    showAll = False  
+
 prevRow = None  
 entries = {}
 streams = {}
@@ -58,7 +64,7 @@ for row in f:
                     if streamId in streams.keys() :
                         entries[streamId].stream = streams[streamId]
                         
-    elif "STREAM id" in row : 
+    elif "STREAM id" in row and "RESET_STREAM id" not in row : 
         data = row.split("fin=")
         if len(data) >= 1 :
             streamId = int(data[0].replace("STREAM id=", "").strip())
@@ -70,9 +76,13 @@ for row in f:
                 streams[streamId] = stream
             else :
                 stream = streams[streamId]
-            if streamOffset in stream.keys() :
-                stream[streamOffset].occurrences += 1
-            else : 
+            found = False
+            for offset in stream :
+                if (streamOffset >= offset and streamOffset < (streamOffset + pduLength)) or (pduLength > offset and pduLength <= (streamOffset + pduLength)) :
+                    stream[offset].occurrences += 1
+                    found = True
+                    break
+            if not found : 
                 stream[streamOffset] = Range(streamOffset, pduLength, 1)
                 if streamId in entries.keys() :
                     entries[streamId].stream = stream
@@ -87,18 +97,18 @@ for key in sorted(entries) :
             data.pNum += stream[offset].occurrences - 1
 
 f = open(filename + "_converted",'w') 
-f.write("Track ID;Object ID;Group ID;SreamId;ACKs;Number of retransmissions;\n")
+f.write("Track ID;Object ID;Group ID;SreamId;Number of retransmissions;\n")
 for key in sorted(entries) : 
     data = entries[key]
-    if isinstance(data, rowData) : 
-        print(data.trackId, data.objectId, data.groupId, data.streamId, data.ackNum, data.pNum)
-        f.write(str(data.trackId) + ";" + 
-                str(data.objectId) + ";" + 
-                str(data.groupId) + ";" + 
-                str(data.streamId) + ";" + 
-                str(data.ackNum) + ";" + 
-                str(data.pNum) + 
-                ";\n")
+    if isinstance(data, rowData): 
+        if showAll or data.pNum > 0: 
+            print(data.trackId, data.objectId, data.groupId, data.streamId, data.pNum)
+            f.write(str(data.trackId) + ";" + 
+                    str(data.objectId) + ";" + 
+                    str(data.groupId) + ";" + 
+                    str(data.streamId) + ";" + 
+                    str(data.pNum) + 
+                    ";\n")
     else : 
         print(key, data)
         f.write("/;/;/;" + 

@@ -2,7 +2,7 @@ import argparse
 from functools import reduce
 
 class rowData :
-    def __init__(self, trackId, groupId, objectId, streamId, ackNum = 0, pNum = 0, stream = None):
+    def __init__(self, trackId, groupId, objectId, streamId, ackNum = 0, pNum = 0, stream = None, data = []):
         self.trackId = trackId
         self.groupId = groupId
         self.objectId = objectId
@@ -10,7 +10,15 @@ class rowData :
         self.ackNum = ackNum
         self.pNum = pNum
         self.stream = stream
+        self.data = data
         
+class QuicPacket : 
+    def __init__(self, id,  offset, length, dataMode = False,) -> None :    
+        self.id = id
+        self.offset = offset
+        self.length = length
+        self.dataMode = dataMode    
+
 class Range :
     def __init__(self, offset, length, occurrences) -> None:
         self.offset = offset
@@ -42,32 +50,102 @@ else :
 prevRow = None  
 entries = {}
 streams = {}
+dataMode = False
+ack = False
+readingContent = False
 for row in f: 
-    if "No." in row :
+    if readingContent :
+        data = row.split("   ")[0].split("  ")[1].strip()
+        streamData += data
+        data = streamData.replace("40 54 00 00 ", "").split(" ")
+        if(len(data) >= 2 and data[0].isalnum() and data[1].isalnum()) :
+            trackId = int(data[0], 16)
+            if len(data) >= 4  and data[2].isalnum() and data[3].isalnum(): 
+                if (int(data[1], 16) < 0x40) :
+                    groupId = int(data[1], 16)
+                    objectId = int("0x" + data[2], 16)
+                else : 
+                    groupId = int("0x" + data[1] + data[2], 16) - 0x4000
+                    objectId = int("0x" + data[3], 16)  
+            row_data =  rowData(trackId, groupId, objectId, streamId)
+            row_data.stream = streams[streamId]
+            entries[streamId] = row_data
+        entries[streamId] = rowData(trackId, groupId, objectId, streamId)
+        readingContent = False
+    elif "No." in row :
         quicPackets = []
         currentQuicPacket = 0
+    elif "ACK" in row :
+        ack = True
     elif prevRow is not None and "Decrypted QUIC" in prevRow :
         # print(row)
-        row1 = row.split("40 54 00 00 ")
-        if len(row1) > 1 :
-            data = row1[1].split()
-            if len(data) >=1 : data.pop()
-            # print(len(data), data)
-            if(len(data) >= 2 and data[0].isalnum() and data[1].isalnum()) :
-                trackId = int(data[0], 16)
-                if len(data) >= 4  and data[2].isalnum() and data[3].isalnum(): 
-                    if (int(data[1], 16) < 0x40) :
-                        groupId = int(data[1], 16)
-                        objectId = int("0x" + data[2], 16)
+        if len(quicPackets) > 0 : 
+            quicPacket = quicPackets[currentQuicPacket]
+            streamId = quicPacket.id
+            dataMode = quicPacket.dataMode
+            currentQuicPacket += 1
+            if not dataMode :            
+                row1 = row.split("40 54 00 00 ")
+                if len(row1) > 1 :
+                    data = row1[1].split()
+                    if len(data) >=1 : data.pop()
+                    # print(len(data), data)
+                    if(len(data) >= 2 and data[0].isalnum() and data[1].isalnum()) :
+                        trackId = int(data[0], 16)
+                        if len(data) >= 4  and data[2].isalnum() and data[3].isalnum(): 
+                            if (int(data[1], 16) < 0x40) :
+                                groupId = int(data[1], 16)
+                                objectId = int("0x" + data[2], 16)
+                            else : 
+                                groupId = int("0x" + data[1] + data[2], 16) - 0x4000
+                                objectId = int("0x" + data[3], 16)  
+                        entries[streamId] = rowData(trackId, groupId, objectId, streamId)
+                        if streamId in streams.keys() :
+                            entries[streamId].stream = streams[streamId]
+            else : 
+                quicInfoLength = 1
+                if streamId > 0x3f : quicInfoLength += 2
+                else : quicInfoLength += 1
+                if ack : quicInfoLength += 6
+                if quicPacket.offset > 0x3f : quicInfoLength += 2
+                elif quicPacket.offset > 0 : quicInfoLength += 1
+                if quicPacket.length > 0x3f : quicInfoLength += 2
+                elif quicPacket.length > 0 : quicInfoLength += 1
+                rowDataOffset = 16 - quicInfoLength
+                if rowDataOffset < 6 :
+                    if rowDataOffset > 0 :
+                        streamData = row.split("   ")[0].split("  ")[1].strip() + " "
+                    if quicPacket.length > rowDataOffset :
+                        readingContent = True
                     else : 
-                        groupId = int("0x" + data[1] + data[2], 16) - 0x4000
-                        objectId = int("0x" + data[3], 16)                
-                if len(quicPackets) > 0 : 
-                    streamId = quicPackets[currentQuicPacket]
-                    currentQuicPacket += 1
-                    entries[streamId] = rowData(trackId, groupId, objectId, streamId)
-                    if streamId in streams.keys() :
-                        entries[streamId].stream = streams[streamId]
+                        row_data = rowData(-1, -1, -1, streamId)
+                        row_data.data = streamData
+                        entries[streamId] = row_data
+                        
+                dataMode = False
+        row1 = row.split("40 54 00 00 ")
+        # if len(row1) > 1 :
+        #     data = row1[1].split()
+        #     if len(data) >=1 : data.pop()
+        #     # print(len(data), data)
+        #     if(len(data) >= 2 and data[0].isalnum() and data[1].isalnum()) :
+        #         trackId = int(data[0], 16)
+        #         if len(data) >= 4  and data[2].isalnum() and data[3].isalnum(): 
+        #             if (int(data[1], 16) < 0x40) :
+        #                 groupId = int(data[1], 16)
+        #                 objectId = int("0x" + data[2], 16)
+        #             else : 
+        #                 groupId = int("0x" + data[1] + data[2], 16) - 0x4000
+        #                 objectId = int("0x" + data[3], 16)                
+        #         if len(quicPackets) > 0 : 
+        #             quicPacket = quicPackets[currentQuicPacket]
+        #             streamId = quicPacket.id
+        #             dataMode = quicPacket.dataMode
+        #             currentQuicPacket += 1
+        #             entries[streamId] = rowData(trackId, groupId, objectId, streamId)
+        #             if streamId in streams.keys() :
+        #                 entries[streamId].stream = streams[streamId]
+        ack = False
                         
     elif "STREAM id" in row and "RESET_STREAM id" not in row : 
         data = row.split("fin=")
@@ -75,8 +153,9 @@ for row in f:
             streamId = int(data[0].replace("STREAM id=", "").strip())
             streamDetails = data[1].split(" ")
             streamOffset = int(streamDetails[1].replace("off=", ""))
-            if streamOffset == 0 : quicPackets.append(streamId)
             pduLength = int(streamDetails[2].replace("len=", ""))
+            if ((streamOffset <= 6) and (pduLength <= (6 - streamOffset))) or ack : quicPackets.append(QuicPacket(streamId, streamOffset, pduLength, True))
+            elif streamOffset == 0 : quicPackets.append(QuicPacket(streamId, streamOffset, pduLength, False))
             if streamId not in streams.keys() :
                 stream = {}
                 streams[streamId] = stream

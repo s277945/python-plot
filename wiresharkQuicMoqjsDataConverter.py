@@ -178,8 +178,9 @@ for key in sorted(entries) :
     data = entries[key]
     if isinstance(data, rowData) : 
         stream = data.stream
-        for offset in stream :
-            data.pNum += stream[offset].occurrences - 1
+        if stream is not None : 
+            for offset in stream :
+                data.pNum += stream[offset].occurrences - 1
 
 f = open(filename + "_converted",'w') 
 f.write("Track ID;Object ID;Group ID;SreamId;Number of retransmissions;\n")

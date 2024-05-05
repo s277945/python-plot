@@ -132,7 +132,6 @@ for i in data:
                                 groupId = int(moqHeader[2:3], 16)
                         stream.trackId = trackId
                         stream.groupId = groupId
-                        print(stream.trackId, streamId)
 
 w.write("Track ID;Object ID;Group ID;StreamId;Number of retransmissions;\n")
 for streamId in streams :

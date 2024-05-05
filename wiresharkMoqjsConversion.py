@@ -77,9 +77,10 @@ for i in data:
                         offset = int(entry[0], 16) - 0x4000
                     elif len(temp) > 4 :
                         offset = int(entry[0], 16) - 0x80004000
+                if key == 'quic.stream.length' :
+                    length = int(entry)
                 if key == 'quic.stream_data_raw' :
-                    data = entry[0]
-                    length = entry[2]                    
+                    data = entry[0]                 
             if streamId is not None :
                 if streamId not in streams : 
                     stream = Stream(streamId)
@@ -87,10 +88,10 @@ for i in data:
                 else :                    
                     stream = streams[streamId]      
                 if offset < 0x10 and data is not None and len(data) > 0:
-                    if ((len(data) + offset) <= 0x10) : 
+                    if ((len(data) + offset) <= 0x18) : 
                         dataEnd = len(data) + offset
                     else : 
-                        dataEnd = 0x10
+                        dataEnd = 0x18
                     for index in range(offset, dataEnd) :
                         stream.moqHeader[index] = data[index - offset]
                 if offset not in stream.packets : 
@@ -112,9 +113,12 @@ for i in data:
                 header = ""
                 for i in keys : 
                     header +=  stream.moqHeader[i]
-                if len(header) >= 16 and '40540000' in header :
+                if offset < 0x10 and len(header) >= 16 and '40540000' in header :
                     moqHeader = header.replace('40540000', '')
-                    trackId = int(moqHeader[0:2], 16)
+                    if moqHeader[0:1] == '0' :
+                        trackId = int(moqHeader[0:2], 16)
+                    else :
+                        trackId = int(moqHeader[0:1], 16)
                     if(trackId < 0xf and trackId > 1) :
                         temp = int(moqHeader[2:4], 16)
                         if temp < 0x40 :
@@ -128,17 +132,18 @@ for i in data:
                                 groupId = int(moqHeader[2:3], 16)
                         stream.trackId = trackId
                         stream.groupId = groupId
+                        print(stream.trackId, streamId)
 
 w.write("Track ID;Object ID;Group ID;StreamId;Number of retransmissions;\n")
 for streamId in streams :
     stream = streams[streamId]
     # print(stream.occurrences)
     if stream.trackId is not None : 
-        print(stream.trackId, 0, stream.groupId, streamId, stream.occurrences)
+        print(stream.trackId, 0, stream.groupId, streamId, stream.occurrences - 1)
         w.write(str(stream.trackId) + ";" + "0;" + 
                         str(stream.groupId) + ";" + 
                         str(streamId) + ";" + 
-                        str(stream.occurrences) + 
+                        str(stream.occurrences - 1) + 
                         ";\n")   
     
 # Closing file

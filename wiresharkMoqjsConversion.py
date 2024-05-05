@@ -3,11 +3,13 @@ from functools import reduce
 import json
 
 class Stream :
-    def __init__(self, id, packets = {},  moqHeader = {}, occurrences = 1) -> None:
+    def __init__(self, id, packets = {},  moqHeader = {}, occurrences = 0) -> None:
         self.id = id
         self.packets = packets
         self.moqHeader = moqHeader
         self.occurrences = occurrences
+        self.trackId = None
+        self.groupId = None
     
 class Packet :
     def __init__(self, offset, length, data = "", occurrences = 1) -> None:
@@ -16,11 +18,29 @@ class Packet :
         self.data = data
         self.occurrences = occurrences
 
-dictfilt = lambda x, y: dict([ (i,x[i]) for i in x if i in set(y) ])
-wanted_keys = ('quic.stream_data_raw')
-# Opening JSON file
-f = open('test2.json')
- 
+argParser = argparse.ArgumentParser(prog='plotMoqjsTimestamp.py',
+                    description='Program that allows to convert wireshark decrypted quic moq-js data in json format',
+                    epilog='By Alessandro Bottisio')
+
+argParser.add_argument('-f', '--file', required=False)
+argParser.add_argument('-wof', '--writeOutputFile', required=False)
+args = argParser.parse_args()
+
+if args.file is not None and args.file != "" :
+    filename = args.file
+    print("Opening moq-js log file", filename)
+    f = open(filename,'r') 
+else :
+    print("Opening moq-js log file", 'log.txt')
+    f = open('log.json','r')
+
+    
+if args.writeOutputFile is not None and args.writeOutputFile != "" :
+    outFilename = args.writeOutputFile
+    w = open(outFilename,'w') 
+else :
+    w = open('moqjsRetransmissionData.txt','w')
+
 # returns JSON object as 
 # a dictionary
 data = json.load(f)
@@ -38,63 +58,98 @@ for i in data:
             offset = 0
             streamId = None
             data = None
+            stream = None
+            frameType = 0
             for key, entry in filteredData.items() :
-                if key == 'quic.stream.stream_id_raw' :
-                    streamId = entry[0]
+                if key == 'quic.frame_type' :
+                    frameType = int(entry)
+                    if frameType not in range(0x08, 0x0f) :
+                        streamId = None
+                        break
+                if key == 'quic.stream.stream_id' :
+                    streamId = entry
                 if key == 'quic.stream.offset_raw' :
                     offset = int(entry[0], 16)
+                    temp = entry[0]
+                    if len(temp) < 4 : 
+                        offset = int(entry[0], 16)
+                    elif len(temp) == 4 :
+                        offset = int(entry[0], 16) - 0x4000
+                    elif len(temp) > 4 :
+                        offset = int(entry[0], 16) - 0x80004000
                 if key == 'quic.stream_data_raw' :
                     data = entry[0]
-                    length = entry[2]
+                    length = entry[2]                    
             if streamId is not None :
-                # print("Stream id:", streamId, "\nOffset:", offset, "\nLength:", length, "\nData:", data)
                 if streamId not in streams : 
                     stream = Stream(streamId)
                     streams[streamId] = stream
                 else :                    
-                    stream = streams[streamId]
-                if offset < 16 and data is not None and len(data) > 0:
-                    if ((len(data) + offset) <= 16) : dataEnd = len(data) + offset
-                    else : dataEnd = 16
+                    stream = streams[streamId]      
+                if offset < 0x10 and data is not None and len(data) > 0:
+                    if ((len(data) + offset) <= 0x10) : 
+                        dataEnd = len(data) + offset
+                    else : 
+                        dataEnd = 0x10
                     for index in range(offset, dataEnd) :
                         stream.moqHeader[index] = data[index - offset]
-                    # print(len(data), data[0:16])
                 if offset not in stream.packets : 
                     stream.packets[offset] = Packet(offset, length)
                 else :
                     packet = stream.packets[offset]
                     if length > packet.length : 
                         packet.length = length
-                        packet.occurrences += 1
+                    packet.occurrences += 1
+                keys = list(stream.moqHeader.keys())
+                keys.sort()
+                header = ""
+                for i in keys : 
+                    header +=  stream.moqHeader[i]
+                if len(header) >= 16 and '40540000' in header :
+                    moqHeader = header.replace('40540000', '')
+                    trackId = int(moqHeader[0:2], 16)
+                    if(trackId < 0xf and trackId > 1) :
+                        temp = int(moqHeader[2:4], 16)
+                        if temp < 0x40 :
+                            groupId = temp
+                        else :
+                            if moqHeader[2:4] == '80' :
+                                groupId = int(moqHeader[2:10], 16) - 0x80004000
+                            if moqHeader[2:3] == '4' :
+                                groupId = int(moqHeader[2:6], 16) - 0x4000
+                            else :
+                                groupId = int(moqHeader[2:3], 16)
+                        stream.trackId = trackId
+                        stream.groupId = groupId
+                        print(trackId, groupId)
 
+w.write("Track ID;Object ID;Group ID;StreamId;Number of retransmissions;\n")
 for streamId in streams :
     stream = streams[streamId]
-    # print(stream)
-    packets = stream.packets
-    keys = list(packets.keys())
-    keys.sort()
-    sorted_dict = {i: packets[i] for i in keys}
-    stream.packets = packets = sorted_dict
-    # print(packets)
-    
-    # packets.sort(reversed = True)
-    for offset in packets :
-        # print(offset)
-        packet = packets[offset]
-        if offset < 16 and len(stream.moqHeader) < 16:
-            data = packet.data
-            # print(data)
-            if ((len(data) + offset) <= 16) : length = len(data) + offset
-            else : length = 16
-            for index in range(offset, length) :
-                stream.moqHeader[index] = data[index - offset]
-    keys = list(stream.moqHeader.keys())
-    keys.sort()
-    header = ""
-    for i in keys : 
-        header +=  stream.moqHeader[i]
-    # print(header)
+    print(stream.occurrences)
+    if stream.trackId is not None : 
+        packets = stream.packets
+        keys = list(packets.keys())
+        keys.sort()
+        sorted_dict = {i: packets[i] for i in keys}
+        packets = sorted_dict
         
+        gratestOffset = -1
+        for offset in packets :
+            packet = packets[offset]
+            if offset > gratestOffset :
+                gratestOffset = packet.length
+                stream.occurrences += packet.occurrences - 1
+            else : 
+                stream.occurrences += packet.occurrences
+
+        print(stream.trackId, 0, stream.groupId, streamId, stream.occurrences)
+        w.write(str(stream.trackId) + ";" + "0;" + 
+                        str(stream.groupId) + ";" + 
+                        str(streamId) + ";" + 
+                        str(stream.occurrences) + 
+                        ";\n")   
     
 # Closing file
 f.close()
+w.close()

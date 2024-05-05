@@ -94,12 +94,19 @@ for i in data:
                     for index in range(offset, dataEnd) :
                         stream.moqHeader[index] = data[index - offset]
                 if offset not in stream.packets : 
-                    stream.packets[offset] = Packet(offset, length)
+                    packetRetransmitted = False
+                    for key in stream.packets :
+                        if (offset >= key and offset < stream.packets[key].length) or (length > key and length <= stream.packets[key].length) :
+                            packetRetransmitted = True
+                            stream.occurrences += 1
+                            break
+                    if not packetRetransmitted :
+                        stream.packets[offset] = Packet(offset, length)
                 else :
                     packet = stream.packets[offset]
                     if length > packet.length : 
                         packet.length = length
-                    packet.occurrences += 1
+                    stream.occurrences += 1
                 keys = list(stream.moqHeader.keys())
                 keys.sort()
                 header = ""
@@ -121,28 +128,12 @@ for i in data:
                                 groupId = int(moqHeader[2:3], 16)
                         stream.trackId = trackId
                         stream.groupId = groupId
-                        print(trackId, groupId)
 
 w.write("Track ID;Object ID;Group ID;StreamId;Number of retransmissions;\n")
 for streamId in streams :
     stream = streams[streamId]
-    print(stream.occurrences)
+    # print(stream.occurrences)
     if stream.trackId is not None : 
-        packets = stream.packets
-        keys = list(packets.keys())
-        keys.sort()
-        sorted_dict = {i: packets[i] for i in keys}
-        packets = sorted_dict
-        
-        gratestOffset = -1
-        for offset in packets :
-            packet = packets[offset]
-            if offset > gratestOffset :
-                gratestOffset = packet.length
-                stream.occurrences += packet.occurrences - 1
-            else : 
-                stream.occurrences += packet.occurrences
-
         print(stream.trackId, 0, stream.groupId, streamId, stream.occurrences)
         w.write(str(stream.trackId) + ";" + "0;" + 
                         str(stream.groupId) + ";" + 

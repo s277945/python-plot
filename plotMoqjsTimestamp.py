@@ -14,6 +14,7 @@ class rowData :
         self.sender_jitter = sender_jitter
         self.receiver_jitter = receiver_jitter
         self.value = value
+        self.retransmissions = 0
         if (sender_ts is not None and receiver_ts is not None and receiver_ts > sender_ts) : 
             self.latency = receiver_ts - sender_ts
         elif (latency is not None) : 
@@ -61,6 +62,7 @@ argParser = argparse.ArgumentParser(prog='plotMoqjsTimestamp.py',
                     description='Program that allows to plot moq-js logger data',
                     epilog='By Alessandro Bottisio')
 argParser.add_argument('-f', '--file', required=False)
+argParser.add_argument('-wpf', '--wshparsedfile', required=False)
 argParser.add_argument('-sks', '--skipstart', required=False)
 argParser.add_argument('-ske', '--skipend', required=False)
 argParser.add_argument('-mh', '--maxheight', required=False)
@@ -78,6 +80,14 @@ else :
     print("Opening moq-js log file", 'log.txt')
     f = open('log.txt','r')
     
+if args.wshparsedfile is not None and args.wshparsedfile != "" :
+    wshfilename = args.wshparsedfile
+    wshfile = True
+    print("Opening wireshark parsed moq-js data file", wshfilename)
+    wshf = open(wshfilename,'r') 
+else :
+    wshfile = False
+
 skip = 0
 if args.skipstart is not None :    
     skip = int(args.skipstart)
@@ -189,6 +199,15 @@ for row in f:
         cpuTrack[cpuLogCount] = rowData(cpuLogCount, value=float(row[4]), sender_ts=int(row[2]), color=color)
         cpuLogCount += 1
 
+
+if wshfile :
+    for row in wshf :
+        row = row.strip('\n').split(';') 
+        if row[0].isnumeric() :
+            name = row[0] + "-" + row[1] + "-" + row[2]
+            if row[4].isnumeric() and name in data :
+                data[name].recurrences = row[4]
+
 # filter cpu logs with timestamp greater than last valid packet log sender_ts
 i = -1
 lastTS = None
@@ -200,6 +219,8 @@ print("Tracks found: " + str(len(tracks)))
 
 additional_axs = 0
 if cpulog : 
+    additional_axs += 1
+if wshfile :
     additional_axs += 1
     
 if len(tracks) == 0 :
@@ -229,6 +250,10 @@ elif (len(tracks) == 1) :
                     totalJitter += 100
                 else : 
                     totalJitter += elem.sender_jitter
+                if wshfile :
+                    if sharex : axs[-additional_axs].bar((elem.sender_ts - startTS)/1000, elem.recurrences, color = elem.color)
+                    else : axs[-additional_axs].bar(str((elem.sender_ts - startTS)/1000), elem.recurrences, color = elem.color)
+
     
     for elem in cpuTrack.values() :
         if cpulog : 
@@ -241,10 +266,19 @@ elif (len(tracks) == 1) :
         if(key.isnumeric()) :
             axs[0].set_ylabel(names[key] + ' latency\n(ms)', fontsize = 12)
             axs[1].set_ylabel(names[key] + ' jitter\n(ms)', fontsize = 12)
-    if cpulog :
-        axs[2].set_ylabel('CPU usage\n(%)', fontsize = 12)
-        axs[2].set_xlabel('Time in seconds', fontsize = 12)
-    else : axs[1].set_xlabel('Time in seconds', fontsize = 12)
+    if wshfile :
+        axs[-additional_axs].set_xlabel('Time in seconds', fontsize = 12)
+        axs[-additional_axs].set_ylabel('Number of retransmissions', fontsize = 12)
+        num = round(len(axs[-additional_axs].get_xticks()) / 20)            
+        if num == 0 : num = 1
+        axs[-additional_axs].set_xticks(axs[-additional_axs].get_xticks()[::num])
+    if cpulog : 
+        axs[-1].set_xlabel('Time in seconds', fontsize = 12)
+        axs[-1].set_ylabel('CPU usage\n(%)', fontsize = 12)
+        num = round(len(axs[-1].get_xticks()) / 20)            
+        if num == 0 : num = 1
+        axs[-1].set_xticks(axs[-1].get_xticks()[::num])
+    if not cpulog and not wshfile : axs[1].set_xlabel('Time in seconds', fontsize = 12)
     props = {"rotation" : 45} # label rotation property
     for ax in axs : 
         num = round(len(ax.get_xticks()) / 20) # set number of labels to show
@@ -307,8 +341,11 @@ else :
                     totalJitter += 100
                 else : 
                     totalJitter += elem.sender_jitter
+                if wshfile :
+                    if sharex : axs[-additional_axs].bar((elem.sender_ts - startTS)/1000, elem.recurrences, color = elem.color)
+                    else : axs[-additional_axs].bar(str((elem.sender_ts - startTS)/1000), elem.recurrences, color = elem.color)
                 
-        if not cpulog : axs[-1].set_xlabel('Time in seconds', fontsize = 12)
+        if not cpulog and not wshfile : axs[-1].set_xlabel('Time in seconds', fontsize = 12)
         axs[(index+1)*2 - 1].set_ylabel(names[key] + '\nlatency', fontsize = 12)
         num = round(len(axs[(index+1)*2 - 1].get_xticks()) / 20)
         if num == 0 : 
@@ -338,6 +375,12 @@ else :
             else : axs[-1].bar(str((elem.sender_ts - startTS)/1000), elem.value, color = elem.color)
             totalCPU += elem.value
         
+    if wshfile :
+        axs[-additional_axs].set_xlabel('Time in seconds', fontsize = 12)
+        axs[-additional_axs].set_ylabel('Number of retransmissions', fontsize = 12)
+        num = round(len(axs[-additional_axs].get_xticks()) / 20)            
+        if num == 0 : num = 1
+        axs[-additional_axs].set_xticks(axs[-additional_axs].get_xticks()[::num])
     if cpulog : 
         axs[-1].set_xlabel('Time in seconds', fontsize = 12)
         axs[-1].set_ylabel('CPU usage\n(%)', fontsize = 12)

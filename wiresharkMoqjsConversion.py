@@ -87,13 +87,13 @@ for i in data:
                     streams[streamId] = stream
                 else :                    
                     stream = streams[streamId]      
-                if offset < 0x10 and data is not None and len(data) > 0:
-                    if ((len(data) + offset) <= 0x18) : 
-                        dataEnd = len(data) + offset
+                if offset < 0x0a and data is not None and len(data) > 0:
+                    if ((len(data) + offset*2) < 0x16) : 
+                        dataEnd = len(data) + offset*2
                     else : 
-                        dataEnd = 0x18
-                    for index in range(offset, dataEnd) :
-                        stream.moqHeader[index] = data[index - offset]
+                        dataEnd = 0x15
+                    for index in range(offset*2, dataEnd) :
+                        stream.moqHeader[index] = data[index - offset*2]
                 if offset not in stream.packets : 
                     packetRetransmitted = False
                     for key in stream.packets :
@@ -113,7 +113,7 @@ for i in data:
                 header = ""
                 for i in keys : 
                     header +=  stream.moqHeader[i]
-                if offset < 0x10 and len(header) >= 16 and '40540000' in header :
+                if offset < 0x0b and len(header) >= 0x0b and '40540000' in header :
                     moqHeader = header.replace('40540000', '')
                     if moqHeader[0:1] == '0' :
                         trackId = int(moqHeader[0:2], 16)

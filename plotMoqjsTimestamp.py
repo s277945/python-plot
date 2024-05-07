@@ -204,9 +204,11 @@ if wshfile :
     for row in wshf :
         row = row.strip('\n').split(';') 
         if row[0].isnumeric() :
-            name = row[0] + "-" + row[1] + "-" + row[2]
-            if row[4].isnumeric() and name in data :
-                data[name].recurrences = row[4]
+            track = row[0]
+            name = row[1] + "-" + row[2]
+            if row[4].isnumeric() and row[0] in tracks and name in tracks[row[0]] :
+                print('a')
+                tracks[row[0]][name].retransmissions = int(row[4])
 
 # filter cpu logs with timestamp greater than last valid packet log sender_ts
 i = -1
@@ -231,7 +233,7 @@ elif (len(tracks) == 1) :
     fig, axs = plt.subplots(2 + additional_axs, figsize=(12, 7), sharex = sharex)
     fig.suptitle('moq-js latency test', fontsize = 20)
     
-    
+    maxRetransmissions = 0
     totalLatency = 0
     totalJitter = 0
     totalCPU = 0
@@ -251,9 +253,9 @@ elif (len(tracks) == 1) :
                 else : 
                     totalJitter += elem.sender_jitter
                 if wshfile :
-                    if sharex : axs[-additional_axs].bar((elem.sender_ts - startTS)/1000, elem.recurrences, color = elem.color)
-                    else : axs[-additional_axs].bar(str((elem.sender_ts - startTS)/1000), elem.recurrences, color = elem.color)
-
+                    if sharex : axs[-additional_axs].bar((elem.sender_ts - startTS)/1000, elem.retransmissions, color = elem.color)
+                    else : axs[-additional_axs].bar(str((elem.sender_ts - startTS)/1000), elem.retransmissions, color = elem.color)
+                    if elem.retransmissions > maxRetransmissions : maxRetransmissions = elem.retransmissions
     
     for elem in cpuTrack.values() :
         if cpulog : 
@@ -272,6 +274,7 @@ elif (len(tracks) == 1) :
         num = round(len(axs[-additional_axs].get_xticks()) / 20)            
         if num == 0 : num = 1
         axs[-additional_axs].set_xticks(axs[-additional_axs].get_xticks()[::num])
+        axs[-additional_axs].set_yticks(np.arange(0, maxRetransmissions*5/4, maxRetransmissions/4))
     if cpulog : 
         axs[-1].set_xlabel('Time in seconds', fontsize = 12)
         axs[-1].set_ylabel('CPU usage\n(%)', fontsize = 12)
@@ -302,6 +305,7 @@ else :
     fig, axs = plt.subplots(len(tracks)*2 + 1 + additional_axs, figsize=(14, 9), sharex = sharex)
     fig.suptitle('moq-js latency test', fontsize = 20)
     
+    maxRetransmissions = 0
     totalLatency = 0
     totalCPU = 0
     
@@ -342,8 +346,9 @@ else :
                 else : 
                     totalJitter += elem.sender_jitter
                 if wshfile :
-                    if sharex : axs[-additional_axs].bar((elem.sender_ts - startTS)/1000, elem.recurrences, color = elem.color)
-                    else : axs[-additional_axs].bar(str((elem.sender_ts - startTS)/1000), elem.recurrences, color = elem.color)
+                    if sharex : axs[-additional_axs].bar((elem.sender_ts - startTS)/1000, elem.retransmissions, color = elem.color)
+                    else : axs[-additional_axs].bar(str((elem.sender_ts - startTS)/1000), elem.retransmissions, color = elem.color)
+                    if elem.retransmissions > maxRetransmissions : maxRetransmissions = elem.retransmissions
                 
         if not cpulog and not wshfile : axs[-1].set_xlabel('Time in seconds', fontsize = 12)
         axs[(index+1)*2 - 1].set_ylabel(names[key] + '\nlatency', fontsize = 12)
@@ -377,10 +382,12 @@ else :
         
     if wshfile :
         axs[-additional_axs].set_xlabel('Time in seconds', fontsize = 12)
-        axs[-additional_axs].set_ylabel('Number of retransmissions', fontsize = 12)
+        axs[-additional_axs].set_ylabel('Number of\nretransmissions', fontsize = 12)
         num = round(len(axs[-additional_axs].get_xticks()) / 20)            
         if num == 0 : num = 1
         axs[-additional_axs].set_xticks(axs[-additional_axs].get_xticks()[::num])
+        # axs[-additional_axs].
+        axs[-additional_axs].set_yticks(np.arange(0, maxRetransmissions*5/4, maxRetransmissions/4))
     if cpulog : 
         axs[-1].set_xlabel('Time in seconds', fontsize = 12)
         axs[-1].set_ylabel('CPU usage\n(%)', fontsize = 12)

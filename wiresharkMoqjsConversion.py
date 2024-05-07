@@ -107,9 +107,7 @@ for i in data:
                         packet = stream.packets[offset]
                         if length > packet.length : 
                             packet.length = length
-                            # if streamId == '5503' : print(offset, length)
                         stream.occurrences += 1
-                        # print('a')
                 keys = list(stream.moqHeader.keys())
                 keys.sort()
                 header = ""
@@ -138,9 +136,8 @@ for i in data:
 w.write("Track ID;Object ID;Group ID;StreamId;Number of retransmissions;\n")
 for streamId in streams :
     stream = streams[streamId]
-    # print(stream.occurrences)
     if stream.trackId is not None : 
-        # print(stream.trackId, 0, stream.groupId, streamId, stream.occurrences - 1)
+        print(stream.trackId, 0, stream.groupId, streamId, stream.occurrences - 1)
         w.write(str(stream.trackId) + ";" + "0;" + 
                         str(stream.groupId) + ";" + 
                         str(streamId) + ";" + 

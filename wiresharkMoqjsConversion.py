@@ -3,11 +3,11 @@ from functools import reduce
 import json
 
 class Stream :
-    def __init__(self, id, packets = {},  moqHeader = {}, occurrences = 0) -> None:
+    def __init__(self, id) -> None:
         self.id = id
-        self.packets = packets
-        self.moqHeader = moqHeader
-        self.occurrences = occurrences
+        self.packets = {}
+        self.moqHeader = {}
+        self.occurrences = 1
         self.trackId = None
         self.groupId = None
     
@@ -97,17 +97,20 @@ for i in data:
                 if offset not in stream.packets : 
                     packetRetransmitted = False
                     for key in stream.packets :
-                        if (offset >= key and offset < stream.packets[key].length) or (length > key and length <= stream.packets[key].length) :
+                        if (offset >= key and offset < (stream.packets[key].length + key)) or (offset + length > key and offset + length <= (stream.packets[key].length + key)) :
                             packetRetransmitted = True
                             stream.occurrences += 1
                             break
                     if not packetRetransmitted :
-                        stream.packets[offset] = Packet(offset, length)
+                        stream.packets[offset] = Packet(offset, length)      
+                        # if streamId == '5503' : print(offset, length)
                 else :
                     packet = stream.packets[offset]
                     if length > packet.length : 
                         packet.length = length
+                        # if streamId == '5503' : print(offset, length)
                     stream.occurrences += 1
+                    # print('a')
                 keys = list(stream.moqHeader.keys())
                 keys.sort()
                 header = ""
@@ -138,7 +141,7 @@ for streamId in streams :
     stream = streams[streamId]
     # print(stream.occurrences)
     if stream.trackId is not None : 
-        print(stream.trackId, 0, stream.groupId, streamId, stream.occurrences - 1)
+        # print(stream.trackId, 0, stream.groupId, streamId, stream.occurrences - 1)
         w.write(str(stream.trackId) + ";" + "0;" + 
                         str(stream.groupId) + ";" + 
                         str(streamId) + ";" + 

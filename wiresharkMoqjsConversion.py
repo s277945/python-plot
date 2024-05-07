@@ -24,6 +24,7 @@ argParser = argparse.ArgumentParser(prog='plotMoqjsTimestamp.py',
 
 argParser.add_argument('-f', '--file', required=False)
 argParser.add_argument('-wof', '--writeOutputFile', required=False)
+argParser.add_argument('-ie', '--includeEmpty', required=False)
 args = argParser.parse_args()
 
 if args.file is not None and args.file != "" :
@@ -40,6 +41,10 @@ if args.writeOutputFile is not None and args.writeOutputFile != "" :
     w = open(outFilename,'w') 
 else :
     w = open('moqjsRetransmissionData.txt','w')
+
+
+includeEmpty = False
+if args.includeEmpty == 'true' : includeEmpty = True
 
 # returns JSON object as 
 # a dictionary
@@ -68,15 +73,8 @@ for i in data:
                         break
                 if key == 'quic.stream.stream_id' :
                     streamId = entry
-                if key == 'quic.stream.offset_raw' :
-                    offset = int(entry[0], 16)
-                    temp = entry[0]
-                    if len(temp) < 4 : 
-                        offset = int(entry[0], 16)
-                    elif len(temp) == 4 :
-                        offset = int(entry[0], 16) - 0x4000
-                    elif len(temp) > 4 :
-                        offset = int(entry[0], 16) - 0x80004000
+                if key == 'quic.stream.offset' :
+                    offset = int(entry)
                 if key == 'quic.stream.length' :
                     length = int(entry)
                 if key == 'quic.stream_data_raw' :
@@ -94,23 +92,24 @@ for i in data:
                         dataEnd = 0x15
                     for index in range(offset*2, dataEnd) :
                         stream.moqHeader[index] = data[index - offset*2]
-                if offset not in stream.packets : 
-                    packetRetransmitted = False
-                    for key in stream.packets :
-                        if (offset >= key and offset < (stream.packets[key].length + key)) or (offset + length > key and offset + length <= (stream.packets[key].length + key)) :
-                            packetRetransmitted = True
-                            stream.occurrences += 1
-                            break
-                    if not packetRetransmitted :
-                        stream.packets[offset] = Packet(offset, length)      
-                        # if streamId == '5503' : print(offset, length)
-                else :
-                    packet = stream.packets[offset]
-                    if length > packet.length : 
-                        packet.length = length
-                        # if streamId == '5503' : print(offset, length)
-                    stream.occurrences += 1
-                    # print('a')
+                if length > 0 or includeEmpty :
+                    if offset not in stream.packets : 
+                        packetRetransmitted = False
+                        for key in stream.packets :
+                            if (offset >= key and offset < (stream.packets[key].length + key)) or (offset + length > key and offset + length <= (stream.packets[key].length + key)) :
+                                print(offset, length, key, stream.packets[key].length)
+                                packetRetransmitted = True
+                                stream.occurrences += 1
+                                break
+                        if not packetRetransmitted :
+                            stream.packets[offset] = Packet(offset, length)      
+                    else :
+                        packet = stream.packets[offset]
+                        if length > packet.length : 
+                            packet.length = length
+                            # if streamId == '5503' : print(offset, length)
+                        stream.occurrences += 1
+                        # print('a')
                 keys = list(stream.moqHeader.keys())
                 keys.sort()
                 header = ""
@@ -141,7 +140,7 @@ for streamId in streams :
     stream = streams[streamId]
     # print(stream.occurrences)
     if stream.trackId is not None : 
-        print(stream.trackId, 0, stream.groupId, streamId, stream.occurrences - 1)
+        # print(stream.trackId, 0, stream.groupId, streamId, stream.occurrences - 1)
         w.write(str(stream.trackId) + ";" + "0;" + 
                         str(stream.groupId) + ";" + 
                         str(streamId) + ";" + 

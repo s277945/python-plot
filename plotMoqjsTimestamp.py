@@ -274,7 +274,8 @@ elif (len(tracks) == 1) :
         num = round(len(axs[-additional_axs].get_xticks()) / 20)            
         if num == 0 : num = 1
         axs[-additional_axs].set_xticks(axs[-additional_axs].get_xticks()[::num])
-        axs[-additional_axs].set_yticks(np.arange(0, maxRetransmissions*5/4, maxRetransmissions/4))
+        if maxRetransmissions > 0 : 
+            axs[-additional_axs].set_yticks(np.arange(0, maxRetransmissions*5/4, maxRetransmissions/4))
     if cpulog : 
         axs[-1].set_xlabel('Time in seconds', fontsize = 12)
         axs[-1].set_ylabel('CPU usage\n(%)', fontsize = 12)
@@ -385,9 +386,9 @@ else :
         axs[-additional_axs].set_ylabel('Number of\nretransmissions', fontsize = 12)
         num = round(len(axs[-additional_axs].get_xticks()) / 20)            
         if num == 0 : num = 1
-        axs[-additional_axs].set_xticks(axs[-additional_axs].get_xticks()[::num])
-        # axs[-additional_axs].
-        axs[-additional_axs].set_yticks(np.arange(0, maxRetransmissions*5/4, maxRetransmissions/4))
+        axs[-additional_axs].set_xticks(axs[-additional_axs].get_xticks()[::num])        
+        if maxRetransmissions > 0 : 
+            axs[-additional_axs].set_yticks(np.arange(0, maxRetransmissions*5/4, maxRetransmissions/4))
     if cpulog : 
         axs[-1].set_xlabel('Time in seconds', fontsize = 12)
         axs[-1].set_ylabel('CPU usage\n(%)', fontsize = 12)

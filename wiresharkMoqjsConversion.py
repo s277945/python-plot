@@ -141,7 +141,7 @@ for streamId in streams :
     stream = streams[streamId]
     # print(stream.occurrences)
     if stream.trackId is not None : 
-        # print(stream.trackId, 0, stream.groupId, streamId, stream.occurrences - 1)
+        print(stream.trackId, 0, stream.groupId, streamId, stream.occurrences - 1)
         w.write(str(stream.trackId) + ";" + "0;" + 
                         str(stream.groupId) + ";" + 
                         str(streamId) + ";" + 

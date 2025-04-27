@@ -173,7 +173,7 @@ for row in f:
                 if name in data and int(data[name].getLatency()) > 35  :
                     data[name].setColor((0.8, 0.1, 0.1, 1))
                     tracks[row[0]][row[1] + "-" + row[2]].setColor((0.8, 0.1, 0.1, 1))                
-            if (audio_row == row[0] and int(audio_row) > 0) or (video_row == row[0] and int(video_row) < 0 and int(audio_row) > 0) : packetCount += 1
+            if (audio_row == row[0] and int(audio_row) > 0) or (video_row == row[0] and int(audio_row) < 0 and int(video_row) > 0) : packetCount += 1
         elif(row[3] == 'too slow' and not skipping and logSlow) :
             # change item color if too slow packet
             if name in data : 
@@ -267,7 +267,7 @@ elif (len(tracks) == 1) :
     for key in names :
         if(key.isnumeric()) :
             axs[0].set_ylabel(names[key] + ' latency\n(ms)', fontsize = 12)
-            axs[1].set_ylabel(names[key] + ' jitter\n(ms)', fontsize = 12)
+            axs[1].set_ylabel(names[key] + ' jitter\n(ms)(tx)', fontsize = 12)
     if wshfile :
         axs[-additional_axs].set_xlabel('Time in seconds', fontsize = 12)
         axs[-additional_axs].set_ylabel('Number of retransmissions', fontsize = 12)
@@ -352,12 +352,12 @@ else :
                     if elem.retransmissions > maxRetransmissions : maxRetransmissions = elem.retransmissions
                 
         if not cpulog and not wshfile : axs[-1].set_xlabel('Time in seconds', fontsize = 12)
-        axs[(index+1)*2 - 1].set_ylabel(names[key] + '\nlatency', fontsize = 12)
+        axs[(index+1)*2 - 1].set_ylabel(names[key] + '\nlatency (ms)', fontsize = 12)
         num = round(len(axs[(index+1)*2 - 1].get_xticks()) / 20)
         if num == 0 : 
             num = 1
         axs[(index+1)*2 - 1].set_xticks(axs[(index+1)*2 - 1].get_xticks()[::num])   
-        axs[(index+1)*2].set_ylabel(names[key] + '\njitter', fontsize = 12)
+        axs[(index+1)*2].set_ylabel(names[key] + ' tx\njitter (ms)', fontsize = 12)
         num = round(len(axs[(index+1)*2].get_xticks()) / 20)            
         if num == 0 : num = 1
         axs[(index+1)*2].set_xticks(axs[(index+1)*2].get_xticks()[::num])

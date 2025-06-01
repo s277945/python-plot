@@ -104,23 +104,35 @@ for row in f:
                             entries[streamId].stream = streams[streamId]
             else : 
                 quicInfoLength = 1
+                if ack : quicInfoLength += 6
                 if streamId > 0x3f : quicInfoLength += 2
                 else : quicInfoLength += 1
-                if ack : quicInfoLength += 6
                 if quicPacket.offset > 0x3f : quicInfoLength += 2
-                elif quicPacket.offset > 0 : quicInfoLength += 1
+                elif quicPacket.offset > 0 : 
+                    quicInfoLength += 1
+                    if quicPacket.offset <= 10 and streamId in entries: 
+                        if "40 54 00 00 " in entries[streamId].data : 
+                            data = entries[streamId].data.split("40 54 00 00 ")[1]                       
+                        print(entries[streamId].data)
+                        streamData = row.split("   ")[0].split("  ")[1].strip() + " "           
+                        data = data[0:quicPacket.offset] + streamData
+                        print(data)
+                        entries[streamId].data = data
+                        print(entries[streamId].data)
+                        print("a")
                 if quicPacket.length > 0x3f : quicInfoLength += 2
                 elif quicPacket.length > 0 : quicInfoLength += 1
                 rowDataOffset = 16 - quicInfoLength
-                if rowDataOffset < 6 :
+                if rowDataOffset < 10 :
                     if rowDataOffset > 0 :
                         streamData = row.split("   ")[0].split("  ")[1].strip() + " "
                     if quicPacket.length > rowDataOffset :
                         readingContent = True
                     else : 
-                        row_data = rowData(-1, -1, -1, streamId)
-                        row_data.data = streamData
-                        entries[streamId] = row_data
+                        if streamId not in entries : 
+                            row_data = rowData(-1, -1, -1, streamId)
+                            row_data.data = streamData
+                            entries[streamId] = row_data
                         
                 dataMode = False
         row1 = row.split("40 54 00 00 ")
@@ -154,7 +166,7 @@ for row in f:
             streamDetails = data[1].split(" ")
             streamOffset = int(streamDetails[1].replace("off=", ""))
             pduLength = int(streamDetails[2].replace("len=", ""))
-            if ((streamOffset <= 6) and (pduLength <= (6 - streamOffset))) or ack : quicPackets.append(QuicPacket(streamId, streamOffset, pduLength, True))
+            if ((streamOffset <= 10) and (pduLength <= (10 - streamOffset))) or ack : quicPackets.append(QuicPacket(streamId, streamOffset, pduLength, True))
             elif streamOffset == 0 : quicPackets.append(QuicPacket(streamId, streamOffset, pduLength, False))
             if streamId not in streams.keys() :
                 stream = {}
@@ -163,7 +175,7 @@ for row in f:
                 stream = streams[streamId]
             found = False
             for offset in stream :
-                if (streamOffset >= offset and streamOffset < (streamOffset + pduLength)) or (pduLength > offset and pduLength <= (streamOffset + pduLength)) :
+                if (streamOffset >= offset and streamOffset < (offset + stream[offset].length)) or (pduLength > offset and pduLength <= (offset + stream[offset].length)) :
                     stream[offset].occurrences += 1
                     found = True
                     break

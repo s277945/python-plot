@@ -190,7 +190,7 @@ for row in f:
                     if(5 < len(row) and row[5].isdecimal()) :
                         data[name].seReceiverJitter(int(row[5]))
                         tracks[row[0]][row[1] + "-" + row[2]].setReceiverJitter(int(row[5]))      
-            if (audio_row == row[0] and int(audio_row) > 0) or (video_row == row[0] and int(video_row) < 0 and int(audio_row) > 0) : packetCount += 1
+            if (audio_row == row[0] and int(audio_row) > 0) or (video_row == row[0] and int(video_row) > 0 and int(audio_row) < 0) : packetCount += 1
         elif(plotSlow and row[3] == 'too slow' and not skipping) :
             # change item color if too slow packet
             if name in data : 
@@ -241,7 +241,9 @@ if int(audio_row) > 0 and int(video_row) > 0 :
         plotData.append(dataLatencyValues)
         labels.append("Fragments latency distribution")        
         _, FD_bins = np.histogram(dataLatencyValues, bins="fd")
-        binsList.append(min(len(FD_bins)-1, 50))
+        bList = max(min(len(FD_bins)-math.trunc(len(FD_bins)/4), 14)+12, 15)        
+        # bList = max(min(len(FD_bins)-math.trunc(len(FD_bins)/4), 14)+12, 15)
+        binsList.append(bList)
         totalLatency = functools.reduce(lambda a, b: int(a)+int(b), dataLatencyValues)  
         total_axs += 1
     if type == 'jitter' or type == 'all' : 
@@ -249,17 +251,21 @@ if int(audio_row) > 0 and int(video_row) > 0 :
         plotData.append(dataJitterValues)
         labels.append("Fragments jitter distribution")
         _, FD_bins = np.histogram(dataJitterValues, bins="fd")
-        binsList.append(min(len(FD_bins)-1, 50))
+        bList = max(min(len(FD_bins)-math.trunc(len(FD_bins)/4), 14)+12, 15)
+        binsList.append(bList)
         totalJitter = functools.reduce(lambda a, b: int(a)+int(b), dataJitterValues)  
         total_axs += 1
 for index, key in enumerate(tracks) :   
     if int(audio_row) > 0 and key == audio_row :
         if type == 'latency' or type == 'all' : 
             audioTrackLatencyValues = list(filter(checkValidInt, map(getLatencies, tracks[key].values())))
+            print(audioTrackLatencyValues)
             plotData.append(audioTrackLatencyValues)
             labels.append("Audio fragments latency distribution")   
             _, FD_bins = np.histogram(audioTrackLatencyValues, bins="fd")
-            binsList.append(min(len(FD_bins)-1, 50))
+            print(_, FD_bins, min(len(FD_bins), 50))
+            bList = max(min(len(FD_bins)-math.trunc(len(FD_bins)/4), 14)+12, 15)
+            binsList.append(bList)
             totalAudioLatency = functools.reduce(lambda a, b: int(a)+int(b), audioTrackLatencyValues)  
             total_axs += 1
         if type == 'jitter' or type == 'all' : 
@@ -267,16 +273,20 @@ for index, key in enumerate(tracks) :
             plotData.append(audioTrackJitterValues)
             labels.append("Audio fragments jitter distribution")
             _, FD_bins = np.histogram(audioTrackJitterValues, bins="fd")
-            binsList.append(min(len(FD_bins)-1, 50))
+            bList = max(min(len(FD_bins)-math.trunc(len(FD_bins)/4), 14)+12, 15)
+            binsList.append(bList)
             totalAudioJitter = functools.reduce(lambda a, b: int(a)+int(b), audioTrackJitterValues)  
             total_axs += 1
     if int(video_row) > 0 and key == video_row :
         if type == 'latency' or type == 'all' : 
             videoTrackLatencyValues = list(filter(checkValidInt, map(getLatencies, tracks[key].values())))
+            print(videoTrackLatencyValues)
             plotData.append(videoTrackLatencyValues)
             labels.append("Video fragments latency distribution")   
             _, FD_bins = np.histogram(videoTrackLatencyValues, bins="fd")
-            binsList.append(min(len(FD_bins)-1, 50))
+            print(_, FD_bins, min(len(FD_bins), 50))
+            bList = max(min(len(FD_bins)-math.trunc(len(FD_bins)/4), 14)+12, 15)
+            binsList.append(bList)
             totalVideoLatency = functools.reduce(lambda a, b: int(a)+int(b), videoTrackLatencyValues)  
             total_axs += 1
         if type == 'jitter' or type == 'all' : 
@@ -284,7 +294,8 @@ for index, key in enumerate(tracks) :
             plotData.append(videoTrackJitterValues)
             labels.append("Video fragments jitter distribution")
             _, FD_bins = np.histogram(videoTrackJitterValues, bins="fd")
-            binsList.append(min(len(FD_bins)-1, 50))
+            bList = max(min(len(FD_bins)-math.trunc(len(FD_bins)/4), 14)+12, 15)
+            binsList.append(bList)
             totalVideoJitter = functools.reduce(lambda a, b: int(a)+int(b), videoTrackJitterValues)   
             total_axs += 1
 if cpulog : 

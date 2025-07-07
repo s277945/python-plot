@@ -47,6 +47,10 @@ class rowData :
         self.color = color
     def getValue(self):
         return self.value
+    def isSent(self):
+        return self.sender_ts is not None
+    def isReceived(self):
+        return self.receiver_ts is not None
 
 def getIndex(li,target): 
     for index, x in enumerate(li): 
@@ -234,28 +238,35 @@ elif (len(tracks) == 1) :
     fig.suptitle('moq-js latency test', fontsize = 20)
     
     maxRetransmissions = 0
+    totalPackets = 0
+    totalNotReceived = 0
     totalLatency = 0
     totalJitter = 0
     totalCPU = 0
     for index, key in enumerate(tracks) :    
-        for elem in tracks[key].values() :             
-            if elem.sender_ts == None : print("Empty sender timestamp value for entry", elem.name, "of track", key)      
-            else : 
-                if sharex : axs[0].bar((elem.sender_ts - startTS)/1000, elem.latency, color = elem.color)
-                else : axs[0].bar(str((elem.sender_ts - startTS)/1000), elem.latency, color = elem.color)
-                totalLatency += elem.latency
-                if elem.sender_jitter == None :
-                    elem.setSenderJitter(0)
-                if sharex : axs[1].bar((elem.sender_ts - startTS)/1000, elem.sender_jitter, color = elem.color)
-                else : axs[1].bar(str((elem.sender_ts - startTS)/1000), elem.sender_jitter, color = elem.color)
-                if elem.sender_jitter > 100 and maxheight < 0 :
-                    totalJitter += 100
+        for elem in tracks[key].values() :    
+            totalPackets += 1
+            if elem.isReceived() == False : 
+                print("Packet not received for entry", elem.name, "of track", key)
+                totalNotReceived += 1
+            else :
+                if elem.isSent() == False : print("Empty sender timestamp value for entry", elem.name, "of track", key)
                 else : 
-                    totalJitter += elem.sender_jitter
-                if wshfile :
-                    if sharex : axs[-additional_axs].bar((elem.sender_ts - startTS)/1000, elem.retransmissions, color = elem.color)
-                    else : axs[-additional_axs].bar(str((elem.sender_ts - startTS)/1000), elem.retransmissions, color = elem.color)
-                    if elem.retransmissions > maxRetransmissions : maxRetransmissions = elem.retransmissions
+                    if sharex : axs[0].bar((elem.sender_ts - startTS)/1000, elem.latency, color = elem.color)
+                    else : axs[0].bar(str((elem.sender_ts - startTS)/1000), elem.latency, color = elem.color)
+                    totalLatency += elem.latency
+                    if elem.sender_jitter == None :
+                        elem.setSenderJitter(0)
+                    if sharex : axs[1].bar((elem.sender_ts - startTS)/1000, elem.sender_jitter, color = elem.color)
+                    else : axs[1].bar(str((elem.sender_ts - startTS)/1000), elem.sender_jitter, color = elem.color)
+                    if elem.sender_jitter > 100 and maxheight < 0 :
+                        totalJitter += 100
+                    else : 
+                        totalJitter += elem.sender_jitter
+                    if wshfile :
+                        if sharex : axs[-additional_axs].bar((elem.sender_ts - startTS)/1000, elem.retransmissions, color = elem.color)
+                        else : axs[-additional_axs].bar(str((elem.sender_ts - startTS)/1000), elem.retransmissions, color = elem.color)
+                        if elem.retransmissions > maxRetransmissions : maxRetransmissions = elem.retransmissions
     
     for elem in cpuTrack.values() :
         if cpulog : 
@@ -309,6 +320,8 @@ else :
     maxRetransmissions = 0
     totalLatency = 0
     totalCPU = 0
+    totalPackets = 0
+    totalNotReceived = 0
     
     axs[0].set_title("All packets")
     axs[0].set_ylabel('Latency\n(ms)', fontsize = 12)
@@ -332,24 +345,29 @@ else :
     for index, key in enumerate(tracks) : 
         totalLatency = 0
         totalJitter = 0
-        for elem in tracks[key].values() :      
-            if elem.sender_ts == None : print("Empty sender timestamp value for entry", elem.name, "of track", key)      
-            else :      
-                if sharex : axs[(index+1)*2 - 1].bar((elem.sender_ts - startTS)/1000, elem.latency, color = elem.color)
-                else : axs[(index+1)*2 - 1].bar(str((elem.sender_ts - startTS)/1000), elem.latency, color = elem.color)
-                totalLatency += elem.latency
-                if elem.sender_jitter == None :
-                    elem.setSenderJitter(0)
-                if sharex : axs[(index+1)*2].bar((elem.sender_ts - startTS)/1000, elem.sender_jitter, color = elem.color)
-                else : axs[(index+1)*2].bar(str((elem.sender_ts - startTS)/1000), elem.sender_jitter, color = elem.color)
-                if elem.sender_jitter > 100 and maxheight < 0 :
-                    totalJitter += 100
-                else : 
-                    totalJitter += elem.sender_jitter
-                if wshfile :
-                    if sharex : axs[-additional_axs].bar((elem.sender_ts - startTS)/1000, elem.retransmissions, color = elem.color)
-                    else : axs[-additional_axs].bar(str((elem.sender_ts - startTS)/1000), elem.retransmissions, color = elem.color)
-                    if elem.retransmissions > maxRetransmissions : maxRetransmissions = elem.retransmissions
+        for elem in tracks[key].values() : 
+            totalPackets += 1
+            if elem.isReceived() == False : 
+                print("Packet not received for entry", elem.name, "of track", key)
+                totalNotReceived += 1
+            else :
+                if elem.isSent() == False : print("Empty sender timestamp value for entry", elem.name, "of track", key)
+                else :      
+                    if sharex : axs[(index+1)*2 - 1].bar((elem.sender_ts - startTS)/1000, elem.latency, color = elem.color)
+                    else : axs[(index+1)*2 - 1].bar(str((elem.sender_ts - startTS)/1000), elem.latency, color = elem.color)
+                    totalLatency += elem.latency
+                    if elem.sender_jitter == None :
+                        elem.setSenderJitter(0)
+                    if sharex : axs[(index+1)*2].bar((elem.sender_ts - startTS)/1000, elem.sender_jitter, color = elem.color)
+                    else : axs[(index+1)*2].bar(str((elem.sender_ts - startTS)/1000), elem.sender_jitter, color = elem.color)
+                    if elem.sender_jitter > 100 and maxheight < 0 :
+                        totalJitter += 100
+                    else : 
+                        totalJitter += elem.sender_jitter
+                    if wshfile :
+                        if sharex : axs[-additional_axs].bar((elem.sender_ts - startTS)/1000, elem.retransmissions, color = elem.color)
+                        else : axs[-additional_axs].bar(str((elem.sender_ts - startTS)/1000), elem.retransmissions, color = elem.color)
+                        if elem.retransmissions > maxRetransmissions : maxRetransmissions = elem.retransmissions
                 
         if not cpulog and not wshfile : axs[-1].set_xlabel('Time in seconds', fontsize = 12)
         axs[(index+1)*2 - 1].set_ylabel(names[key] + '\nlatency (ms)', fontsize = 12)
@@ -400,5 +418,6 @@ else :
     for ax in axs : 
         plt.setp(ax.get_xticklabels(), **props)
 plt.subplots_adjust(left = 0.07, right = 0.975, hspace = 0.85)
+print("Total packets:", totalPackets, "\nTotal not received packets:", totalNotReceived)
 # plt.legend() 
 plt.show() 

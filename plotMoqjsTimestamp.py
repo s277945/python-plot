@@ -1,3 +1,4 @@
+import os
 import math
 import sys
 import matplotlib.pyplot as plt 
@@ -96,6 +97,7 @@ argParser.add_argument('-shx', '--sharex', required=False)
 argParser.add_argument('-lsl', '--logslow', required=False)
 argParser.add_argument('-phd', '--pheader', required=False)
 argParser.add_argument('-shl', '--showlost', required=False)
+argParser.add_argument('-sf', '--savefile', required=False)
 args = argParser.parse_args()
 
 if args.file is not None and args.file != "" :
@@ -154,6 +156,9 @@ if args.pheader is not None : header = args.pheader
 
 showLost = False
 if args.showlost == 'true': showLost = True
+
+saveFile = False
+if args.savefile == 'true': saveFile = True
    
 audio_row = -1
 video_row = -1
@@ -244,68 +249,69 @@ if cpulog:
     additional_axs += 1
 if wshfile:
     additional_axs += 1
-# NON aggiungere più asse per showLost
+if showLost:
+    additional_axs += 1
 
 if len(tracks) == 0 :
     print("No tracks found, program will exit") 
     exit()
     
-elif (len(tracks) == 1) :
-    fig, axs = plt.subplots(2 + additional_axs, figsize=(12, 7), sharex = sharex)
-    fig.suptitle('moq-js latency test', fontsize = 20)
-    
+elif len(tracks) == 1:
+    fig, axs = plt.subplots(2 + additional_axs, figsize=(12, 7))
+    fig.suptitle('moq-js latency test', fontsize=20)
     maxRetransmissions = 0
     totalPackets = 0
     totalNotReceived = 0
     totalLatency = 0
     totalJitter = 0
     totalCPU = 0
-
+    startAxis = 0
     if showLost:
-        x_lost, y_lost = build_cumulative_lost(tracks, startTS)
-        axs[0].step(x_lost, y_lost, where='post', color='tab:red', label='Cumulative Lost Packets')
-        axs[0].set_title("Cumulative lost packets")
-        axs[0].set_ylabel('Cumulative\nlost packets', fontsize=12)
-        axs[0].legend()
-    else:
-        axs[0].set_title("All packets")
-        for key in names:
-            if(key.isnumeric()):
-                axs[0].set_ylabel(names[key] + ' latency\n(ms)', fontsize=12)
-                axs[1].set_ylabel(names[key] + ' jitter\n(ms)(tx)', fontsize=12)
-        for index, key in enumerate(tracks):
-            for elem in tracks[key].values():
-                totalPackets += 1
-                if elem.isReceived() == False:
-                    print("Packet not received for entry", elem.name, "of track", key)
-                    totalNotReceived += 1
-                else:
-                    if elem.isSent() == False:
-                        print("Empty sender timestamp value for entry", elem.name, "of track", key)
-                    else:
-                        if sharex:
-                            axs[0].bar((elem.sender_ts - startTS)/1000, elem.latency, color=elem.color)
-                        else:
-                            axs[0].bar(str((elem.sender_ts - startTS)/1000), elem.latency, color=elem.color)
-                        totalLatency += elem.latency
-                        if elem.sender_jitter == None:
-                            elem.setSenderJitter(0)
-                        if sharex:
-                            axs[1].bar((elem.sender_ts - startTS)/1000, elem.sender_jitter, color=elem.color)
-                        else:
-                            axs[1].bar(str((elem.sender_ts - startTS)/1000), elem.sender_jitter, color=elem.color)
-                        if elem.sender_jitter > 100 and maxheight < 0:
-                            totalJitter += 100
-                        else:
-                            totalJitter += elem.sender_jitter
-                        if wshfile:
-                            if sharex:
-                                axs[-additional_axs].bar((elem.sender_ts - startTS)/1000, elem.retransmissions, color=elem.color)
-                            else:
-                                axs[-additional_axs].bar(str((elem.sender_ts - startTS)/1000), elem.retransmissions, color=elem.color)
-                            if elem.retransmissions > maxRetransmissions:
-                                maxRetransmissions = elem.retransmissions
+        # Usa stringhe per l’asse x cumulativo
+        bar_x = []
+        for elem in tracks[list(tracks)[0]].values():
+            if elem.sender_ts is not None:
+                bar_x.append(str((elem.sender_ts - startTS)/1000))
+        x_lost_raw, y_lost = build_cumulative_lost(tracks, startTS)
+        x_lost = [str(xx) for xx in x_lost_raw]
+        axs[startAxis].step(bar_x, y_lost, where='mid', color='tab:red', label='Cumulative Lost Packets')
+        axs[startAxis].set_title("Cumulative lost packets")
+        axs[startAxis].set_ylabel('Cumulative\nlost packets', fontsize=12)
+        axs[startAxis].legend()
+        startAxis += 1
 
+    axs[startAxis].set_title("All packets")
+    for key in names:
+        if(key.isnumeric()):
+            axs[startAxis].set_ylabel(names[key] + ' latency\n(ms)', fontsize=12)
+            axs[startAxis + 1].set_ylabel(names[key] + ' jitter\n(ms)(tx)', fontsize=12)
+    for index, key in enumerate(tracks):
+        for elem in tracks[key].values():
+            totalPackets += 1
+            if elem.isReceived() == False:
+                print("Packet not received for entry", elem.name, "of track", key)
+                totalNotReceived += 1
+            else:
+                if elem.isSent() == False:
+                    print("Empty sender timestamp value for entry", elem.name, "of track", key)
+                else:
+                    axs[startAxis].bar(str((elem.sender_ts - startTS)/1000), elem.latency, color=elem.color)
+                    totalLatency += elem.latency
+                    if elem.sender_jitter == None:
+                        elem.setSenderJitter(0)
+                    axs[startAxis + 1].bar(str((elem.sender_ts - startTS)/1000), elem.sender_jitter, color=elem.color)
+                    if elem.sender_jitter > 100 and maxheight < 0:
+                        totalJitter += 100
+                    else:
+                        totalJitter += elem.sender_jitter
+                    if wshfile:
+                        if sharex:
+                            axs[-additional_axs].bar((elem.sender_ts - startTS)/1000, elem.retransmissions, color=elem.color)
+                        else:
+                            axs[-additional_axs].bar(str((elem.sender_ts - startTS)/1000), elem.retransmissions, color=elem.color)
+                        if elem.retransmissions > maxRetransmissions:
+                            maxRetransmissions = elem.retransmissions
+    
     for elem in cpuTrack.values():
         if cpulog: 
             if sharex:
@@ -329,25 +335,27 @@ elif (len(tracks) == 1) :
         if num == 0: num = 1
         axs[-1].set_xticks(axs[-1].get_xticks()[::num])
     if not cpulog and not wshfile: axs[1].set_xlabel('Time in seconds', fontsize=12)
+    # if showLost:        
+    #     axs[0].set_xlim(0, axs[0].get_xlim()[1])
     props = {"rotation" : 45} # label rotation property
     for ax in axs : 
         num = round(len(ax.get_xticks()) / 20) # set number of labels to show
         if num == 0 : num = 1        
         ax.set_xticks(ax.get_xticks()[::num])
         plt.setp(ax.get_xticklabels(), **props) # apply label rotation property
-    if not showLost:
-        bottom, top = axs[0].get_ylim()
-        ylen = top - bottom 
-        if maxheight > 0 and ylen > maxheight: 
-            axs[0].set_ylim(0, maxheight)
-            axs[1].set_ylim(0, maxheight/10)
-        if maxheight < 0:
-            axs[0].set_ylim(0, totalLatency * 1.9 / len(data))
-            
-        bottom, top = axs[1].get_ylim()
-        ylen = top - bottom 
-        if maxheight < 0 and (totalJitter * 1.9 / len(data)) > 10: 
-            axs[1].set_ylim(0, totalJitter / len(tracks[key]))
+    
+    bottom, top = axs[startAxis].get_ylim()
+    ylen = top - bottom 
+    if maxheight > 0 and ylen > maxheight: 
+        axs[startAxis].set_ylim(0, maxheight)
+        axs[startAxis + 1].set_ylim(0, maxheight/10)
+    if maxheight < 0:
+        axs[startAxis].set_ylim(0, totalLatency * 1.9 / len(data))
+        
+    bottom, top = axs[startAxis + 1].get_ylim()
+    ylen = top - bottom 
+    if maxheight < 0 and (totalJitter * 1.9 / len(data)) > 10: 
+        axs[startAxis + 1].set_ylim(0, totalJitter / len(tracks[key]))
 
 else:
     fig, axs = plt.subplots(len(tracks)*2 + 1 + additional_axs, figsize=(14, 9), sharex = sharex)
@@ -474,4 +482,11 @@ else:
 
 plt.subplots_adjust(left = 0.07, right = 0.975, hspace = 0.85)
 print("Total packets:", totalPackets, "\nTotal not received packets:", totalNotReceived)
-plt.show() 
+if hasattr(args, "file") and args.file and saveFile:
+    base = os.path.basename(args.file).replace('.txt','_cumuloss')
+    plt.savefig(base + ".png")
+    plt.savefig(base + ".svg")
+    plt.close()
+    print("Saved:", base + ".png and .svg")
+    exit()  # evita plt.show()
+else : plt.show() 

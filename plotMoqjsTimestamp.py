@@ -1,10 +1,16 @@
 import os
 import math
 import sys
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
 import numpy as np
 import argparse
 from matplotlib.ticker import MaxNLocator
+
+COLORS = {
+    "lost": "tab:red",
+    "too_old": "tab:orange",
+    "too_slow": "tab:blue"
+}
 
 class rowData:
     def __init__(self, name, latency=None, color=None, sender_ts=None, receiver_ts=None, sender_jitter=None, receiver_jitter=None, value=None, tooOld=False, tooSlow=False):
@@ -45,7 +51,7 @@ class rowData:
     def getLatency(self):
         return self.latency
     def getColor(self):
-        return self.latency
+        return self.color
     def setColor(self, color):
         self.color = color
     def getValue(self):
@@ -94,7 +100,6 @@ def build_cumulatives(tracks, startTS, data):
         tooslow_y.append(tooslow_cnt)
     return x, lost_y, tooold_y, tooslow_y
 
-# --------- PATCH: funzione dinamica per tick X -------------
 def set_dynamic_max_xticks(ax, fig, min_tick_spacing=100):
     try:
         bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
@@ -104,9 +109,7 @@ def set_dynamic_max_xticks(ax, fig, min_tick_spacing=100):
         ax.xaxis.set_major_locator(MaxNLocator(nbins=max_ticks))
         plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
     except Exception:
-        pass  # Per assi non usati o errori di accesso
-
-# -----------------------------------------------------------
+        pass
 
 data = {}
 tracks = {}
@@ -197,6 +200,8 @@ skipping = True
 cpuLogCount = 0
 startTS = 0
 packetCount = 0
+last_ts_by_track = {}
+
 for row in f:
     row = row.strip('\n').split(';')
     if row[0].isnumeric():
@@ -212,6 +217,7 @@ for row in f:
                 if(row[3] == 'sent'):
                     if startTS == 0:
                         startTS = int(row[4])
+                    last_ts_by_track[row[0]] = int(row[4])  # Patch: aggiorna last_ts!
                     if name in data:
                         data[name].setSenderTS(int(row[4]))
                         tracks[row[0]][row[1] + "-" + row[2]].setSenderTS(int(row[4]))
@@ -235,29 +241,29 @@ for row in f:
                     data[name].setColor((0.8, 0.1, 0.1, 1))
                     tracks[row[0]][row[1] + "-" + row[2]].setColor((0.8, 0.1, 0.1, 1))
             if (audio_row == row[0] and int(audio_row) > 0) or (video_row == row[0] and int(video_row) < 0 and int(video_row) > 0): packetCount += 1
-        elif(row[3] == 'too slow' and not skipping and logSlow):
-            ts = int(row[4]) if len(row) > 4 and row[4].isnumeric() else None
+        elif(row[3] == 'too slow' and not skipping):
+            ts = int(row[4]) if len(row) > 4 and row[4].isnumeric() else last_ts_by_track.get(row[0], None)
             if name not in data:
-                data[name] = rowData(name, sender_ts=ts, color=(0.6, 0.0, 0.4, 1), tooSlow=True)
+                data[name] = rowData(name, sender_ts=ts, color=COLORS["too_slow"], tooSlow=True)
                 if row[0] not in tracks:
                     tracks[row[0]] = {}
-                tracks[row[0]][row[1] + "-" + row[2]] = rowData(row[1] + "-" + row[2], sender_ts=ts, color=(0.6, 0.0, 0.4, 1), tooSlow=True)
+                tracks[row[0]][row[1] + "-" + row[2]] = rowData(row[1] + "-" + row[2], sender_ts=ts, color=COLORS["too_slow"], tooSlow=True)
             else:
-                data[name].setColor((0.6, 0.0, 0.4, 1))
+                data[name].setColor(COLORS["too_slow"])
                 data[name].setTooSlow(True)
-                tracks[row[0]][row[1] + "-" + row[2]].setColor((0.6, 0.0, 0.4, 1))
+                tracks[row[0]][row[1] + "-" + row[2]].setColor(COLORS["too_slow"])
                 tracks[row[0]][row[1] + "-" + row[2]].setTooSlow(True)
         elif(row[3] == 'too old' and not skipping):
-            ts = int(row[4]) if len(row) > 4 and row[4].isnumeric() else None
+            ts = int(row[4]) if len(row) > 4 and row[4].isnumeric() else last_ts_by_track.get(row[0], None)
             if name not in data:
-                data[name] = rowData(name, sender_ts=ts, color=(0.6, 0.2, 0.2, 1), tooOld=True)
+                data[name] = rowData(name, sender_ts=ts, color=COLORS["too_old"], tooOld=True)
                 if row[0] not in tracks:
                     tracks[row[0]] = {}
-                tracks[row[0]][row[1] + "-" + row[2]] = rowData(row[1] + "-" + row[2], sender_ts=ts, color=(0.6, 0.2, 0.2, 1), tooOld=True)
+                tracks[row[0]][row[1] + "-" + row[2]] = rowData(row[1] + "-" + row[2], sender_ts=ts, color=COLORS["too_old"], tooOld=True)
             else:
-                data[name].setColor((0.6, 0.2, 0.2, 1))
+                data[name].setColor(COLORS["too_old"])
                 data[name].setTooOld(True)
-                tracks[row[0]][row[1] + "-" + row[2]].setColor((0.6, 0.2, 0.2, 1))
+                tracks[row[0]][row[1] + "-" + row[2]].setColor(COLORS["too_old"])
                 tracks[row[0]][row[1] + "-" + row[2]].setTooOld(True)
         elif(row[3] == 'AUDIO'):
             names[row[0]] = 'Audio'
@@ -292,6 +298,11 @@ if lastTS is not None:
     cpuTrack = {k: v for k, v in cpuTrack.items() if (lastTS + 99 > v.sender_ts and v.sender_ts is not None)}
 print("Tracks found: " + str(len(tracks)))
 
+cnt_old = sum(1 for d in data.values() if d.tooOld)
+cnt_slow = sum(1 for d in data.values() if d.tooSlow)
+print("Totale pacchetti TOO OLD:", cnt_old)
+print("Totale pacchetti TOO SLOW:", cnt_slow)
+
 additional_axs = 0
 if cpulog:
     additional_axs += 1
@@ -301,7 +312,6 @@ if wshfile:
 if len(tracks) == 0:
     print("No tracks found, program will exit")
     exit()
-
 elif (len(tracks) == 1):
     fig, axs = plt.subplots(2 + additional_axs, figsize=(12, 7), sharex=sharex)
     fig.suptitle('moq-js latency test', fontsize=20)
@@ -316,9 +326,9 @@ elif (len(tracks) == 1):
     if showLost:
         additional_axs += 1
         x_c, y_lost, y_tooold, y_tooslow = build_cumulatives(tracks, startTS, data)
-        axs[startAxis].step(x_c, y_lost, where='mid', color='tab:red', label='Lost')
-        axs[startAxis].step(x_c, y_tooold, where='mid', color='tab:orange', label='Too old')
-        axs[startAxis].step(x_c, y_tooslow, where='mid', color='tab:blue', label='Too slow')
+        axs[startAxis].step(x_c, y_lost, where='mid', color=COLORS["lost"], label='Lost')
+        axs[startAxis].step(x_c, y_tooold, where='mid', color=COLORS["too_old"], label='Too old')
+        axs[startAxis].step(x_c, y_tooslow, where='mid', color=COLORS["too_slow"], label='Too slow')
         axs[startAxis].set_title("Cumulative anomaly packets")
         axs[startAxis].set_ylabel('Cumulative\npackets', fontsize=12)
         axs[startAxis].legend()
@@ -332,42 +342,58 @@ elif (len(tracks) == 1):
     for index, key in enumerate(tracks):
         for elem in tracks[key].values():
             totalPackets += 1
+            # PACCHETTI PERSI (non ricevuti)
             if elem.isReceived() == False:
+                axs[startAxis].bar(
+                    (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                    1,
+                    color=COLORS["lost"]
+                )
                 print("Packet not received for entry", elem.name, "of track", key)
                 totalNotReceived += 1
+                continue  # Non disegnare la barra normale
             else:
                 if elem.isSent() == False:
                     print("Empty sender timestamp value for entry", elem.name, "of track", key)
                 else:
-                    if sharex:
-                        axs[startAxis].bar((elem.sender_ts - startTS) / 1000, elem.latency, color=elem.color)
-                    else:
-                        axs[startAxis].bar(str((elem.sender_ts - startTS) / 1000), elem.latency, color=elem.color)
+                    bar_color = elem.color
+                    if elem.isTooOld():
+                        bar_color = COLORS["too_old"]
+                    elif elem.isTooSlow():
+                        bar_color = COLORS["too_slow"]
+                    axs[startAxis].bar(
+                        (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                        elem.latency,
+                        color=bar_color
+                    )
                     totalLatency += elem.latency
                     if elem.sender_jitter == None:
                         elem.setSenderJitter(0)
-                    if sharex:
-                        axs[startAxis + 1].bar((elem.sender_ts - startTS) / 1000, elem.sender_jitter, color=elem.color)
-                    else:
-                        axs[startAxis + 1].bar(str((elem.sender_ts - startTS) / 1000), elem.sender_jitter, color=elem.color)
+                    axs[startAxis + 1].bar(
+                        (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                        elem.sender_jitter,
+                        color=bar_color
+                    )
                     if elem.sender_jitter > 100 and maxheight < 0:
                         totalJitter += 100
                     else:
                         totalJitter += elem.sender_jitter
                     if wshfile:
-                        if sharex:
-                            axs[-additional_axs].bar((elem.sender_ts - startTS) / 1000, elem.retransmissions, color=elem.color)
-                        else:
-                            axs[-additional_axs].bar(str((elem.sender_ts - startTS) / 1000), elem.retransmissions, color=elem.color)
+                        axs[-additional_axs].bar(
+                            (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                            elem.retransmissions,
+                            color=bar_color
+                        )
                         if elem.retransmissions > maxRetransmissions:
                             maxRetransmissions = elem.retransmissions
 
     for elem in cpuTrack.values():
         if cpulog:
-            if sharex:
-                axs[-1].bar((elem.sender_ts - startTS) / 1000, elem.value, color=elem.color)
-            else:
-                axs[-1].bar(str((elem.sender_ts - startTS) / 1000), elem.value, color=elem.color)
+            axs[-1].bar(
+                (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                elem.value,
+                color=elem.color
+            )
             totalCPU += elem.value
 
     if wshfile:
@@ -379,7 +405,6 @@ elif (len(tracks) == 1):
         axs[-1].set_xlabel('Time in seconds', fontsize=12)
         axs[-1].set_ylabel('CPU usage\n(%)', fontsize=12)
     if not cpulog and not wshfile: axs[1].set_xlabel('Time in seconds', fontsize=12)
-    props = {"rotation": 45}
     for ax in (axs.flat if hasattr(axs, "flat") else axs):
         set_dynamic_max_xticks(ax, fig, min_tick_spacing=min_tick_spacing)
 
@@ -395,9 +420,9 @@ else:
 
     if showLost:
         x_c, y_lost, y_tooold, y_tooslow = build_cumulatives(tracks, startTS, data)
-        axs[0].step(x_c, y_lost, where='mid', color='tab:red', label='Lost')
-        axs[0].step(x_c, y_tooold, where='mid', color='tab:orange', label='Too old')
-        axs[0].step(x_c, y_tooslow, where='mid', color='tab:blue', label='Too slow')
+        axs[0].step(x_c, y_lost, where='mid', color=COLORS["lost"], label='Lost')
+        axs[0].step(x_c, y_tooold, where='mid', color=COLORS["too_old"], label='Too old')
+        axs[0].step(x_c, y_tooslow, where='mid', color=COLORS["too_slow"], label='Too slow')
         axs[0].set_ylabel('Cumulative\npackets', fontsize=12)
         axs[0].legend()
     else:
@@ -405,10 +430,16 @@ else:
         axs[0].set_ylabel('Latency\n(ms)', fontsize=12)
         for key, elem in data.items():
             if elem.sender_ts is not None:
-                if sharex:
-                    axs[0].bar((elem.sender_ts - startTS) / 1000, elem.latency, color=elem.color)
-                else:
-                    axs[0].bar(str((elem.sender_ts - startTS) / 1000), elem.latency, color=elem.color)
+                bar_color = elem.color
+                if elem.isTooOld():
+                    bar_color = COLORS["too_old"]
+                elif elem.isTooSlow():
+                    bar_color = COLORS["too_slow"]
+                axs[0].bar(
+                    (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                    elem.latency,
+                    color=bar_color
+                )
                 totalLatency += elem.latency
         bottom, top = axs[0].get_ylim()
         ylen = top - bottom
@@ -423,32 +454,46 @@ else:
         for elem in tracks[key].values():
             totalPackets += 1
             if elem.isReceived() == False:
+                axs[(index + 1) * 2 - 1].bar(
+                    (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                    1,
+                    color=COLORS["lost"]
+                )
                 print("Packet not received for entry", elem.name, "of track", key)
                 totalNotReceived += 1
+                continue
             else:
                 if elem.isSent() == False:
                     print("Empty sender timestamp value for entry", elem.name, "of track", key)
                 else:
-                    if sharex:
-                        axs[(index + 1) * 2 - 1].bar((elem.sender_ts - startTS) / 1000, elem.latency, color=elem.color)
-                    else:
-                        axs[(index + 1) * 2 - 1].bar(str((elem.sender_ts - startTS) / 1000), elem.latency, color=elem.color)
+                    bar_color = elem.color
+                    if elem.isTooOld():
+                        bar_color = COLORS["too_old"]
+                    elif elem.isTooSlow():
+                        bar_color = COLORS["too_slow"]
+                    axs[(index + 1) * 2 - 1].bar(
+                        (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                        elem.latency,
+                        color=bar_color
+                    )
                     totalLatency += elem.latency
                     if elem.sender_jitter == None:
                         elem.setSenderJitter(0)
-                    if sharex:
-                        axs[(index + 1) * 2].bar((elem.sender_ts - startTS) / 1000, elem.sender_jitter, color=elem.color)
-                    else:
-                        axs[(index + 1) * 2].bar(str((elem.sender_ts - startTS) / 1000), elem.sender_jitter, color=elem.color)
+                    axs[(index + 1) * 2].bar(
+                        (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                        elem.sender_jitter,
+                        color=bar_color
+                    )
                     if elem.sender_jitter > 100 and maxheight < 0:
                         totalJitter += 100
                     else:
                         totalJitter += elem.sender_jitter
                     if wshfile:
-                        if sharex:
-                            axs[-additional_axs].bar((elem.sender_ts - startTS) / 1000, elem.retransmissions, color=elem.color)
-                        else:
-                            axs[-additional_axs].bar(str((elem.sender_ts - startTS) / 1000), elem.retransmissions, color=elem.color)
+                        axs[-additional_axs].bar(
+                            (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                            elem.retransmissions,
+                            color=bar_color
+                        )
                         if elem.retransmissions > maxRetransmissions:
                             maxRetransmissions = elem.retransmissions
 
@@ -472,10 +517,11 @@ else:
 
     for elem in cpuTrack.values():
         if cpulog:
-            if sharex:
-                axs[-1].bar((elem.sender_ts - startTS) / 1000, elem.value, color=elem.color)
-            else:
-                axs[-1].bar(str((elem.sender_ts - startTS) / 1000), elem.value, color=elem.color)
+            axs[-1].bar(
+                (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                elem.value,
+                color=elem.color
+            )
             totalCPU += elem.value
 
     if wshfile:
@@ -487,7 +533,6 @@ else:
         axs[-1].set_xlabel('Time in seconds', fontsize=12)
         axs[-1].set_ylabel('CPU usage\n(%)', fontsize=12)
 
-    props = {"rotation": 45, "visible": True}
     for ax in (axs.flat if hasattr(axs, "flat") else axs):
         set_dynamic_max_xticks(ax, fig, min_tick_spacing=min_tick_spacing)
 
@@ -502,7 +547,6 @@ def on_resize(event):
 fig.canvas.mpl_connect('resize_event', on_resize)
 
 if hasattr(args, "file") and args.file and saveFile:
-    # PATCH: salva figure più grandi
     fig.set_size_inches(30, 14)
     base = os.path.basename(args.file).replace('.txt', '_cumuloss')
     plt.savefig(base + ".png")

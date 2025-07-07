@@ -1,4 +1,3 @@
-
 import math
 import sys
 import matplotlib.pyplot as plt 
@@ -58,6 +57,28 @@ def getIndex(li,target):
             return index 
     return -1
 
+# ---- PATCH: funzione per il cumulativo dei persi ----
+def build_cumulative_lost(tracks, startTS):
+    """
+    Ritorna una curva cumulativa delle perdite allineata ai timestamp di tutti i pacchetti.
+    """
+    packet_entries = []
+    for track in tracks.values():
+        for elem in track.values():
+            if elem.sender_ts is not None:
+                packet_entries.append((elem.sender_ts, not elem.isReceived()))
+    # Ordina per timestamp
+    packet_entries.sort()
+    x = []
+    y = []
+    count = 0
+    for ts, lost in packet_entries:
+        if lost:
+            count += 1
+        x.append((ts - startTS)/1000)
+        y.append(count)
+    return x, y
+
 data = {}
 tracks = {}
 cpuTrack = {}
@@ -74,6 +95,7 @@ argParser.add_argument('-cpu', '--cpulog', required=False)
 argParser.add_argument('-shx', '--sharex', required=False)
 argParser.add_argument('-lsl', '--logslow', required=False)
 argParser.add_argument('-phd', '--pheader', required=False)
+argParser.add_argument('-shl', '--showlost', required=False)
 args = argParser.parse_args()
 
 if args.file is not None and args.file != "" :
@@ -129,6 +151,9 @@ if args.logslow == 'true': logSlow = True
 
 header = 'false'
 if args.pheader is not None : header = args.pheader
+
+showLost = False
+if args.showlost == 'true': showLost = True
    
 audio_row = -1
 video_row = -1
@@ -138,18 +163,13 @@ startTS = 0
 packetCount = 0
 for row in f: 
     row = row.strip('\n').split(';') 
-    # print(row)
-    # print(row[1].isnumeric())
     if row[0].isnumeric() :   
         name = row[0] + "-" + row[1] + "-" + row[2]
-        # if row has track id and latency value
         if 4 < len(row) and row[4].isnumeric() and int(row[2]) > 0 and row[1].isnumeric() and (header == 'true' or (header == 'false' and int(row[1]) > 0) or (header == 'only' and int(row[1]) == 0)) :    
             if packetCount >= skip and packetCount <= skipend :
                 skipping = False   
             else : skipping = True
             if (not skipping) and ((audio_row == row[0] and packetCount >= skip) or (video_row == row[0] and (int(audio_row) > 0 or (int(audio_row) < 0 and packetCount >= skip)))) :            
-                # add track to track array if not present and the received packet data to the individual track data array
-                # add row data (received packet data) to general data array
                 if row[0] not in tracks :
                     tracks[row[0]] = {}
                 if(row[3] == 'sent') :
@@ -172,19 +192,17 @@ for row in f:
                         data[name] = rowData(name, receiver_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))
                         tracks[row[0]][row[1] + "-" + row[2]] = rowData(row[1] + "-" + row[2], receiver_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))                
                     if(5 < len(row) and row[5].isnumeric()) :
-                        data[name].seReceiverJitter(int(row[5]))
+                        data[name].setReceiverJitter(int(row[5]))
                         tracks[row[0]][row[1] + "-" + row[2]].setReceiverJitter(int(row[5]))
                 if name in data and int(data[name].getLatency()) > 35  :
                     data[name].setColor((0.8, 0.1, 0.1, 1))
                     tracks[row[0]][row[1] + "-" + row[2]].setColor((0.8, 0.1, 0.1, 1))                
-            if (audio_row == row[0] and int(audio_row) > 0) or (video_row == row[0] and int(audio_row) < 0 and int(video_row) > 0) : packetCount += 1
+            if (audio_row == row[0] and int(audio_row) > 0) or (video_row == row[0] and int(video_row) < 0 and int(video_row) > 0) : packetCount += 1
         elif(row[3] == 'too slow' and not skipping and logSlow) :
-            # change item color if too slow packet
             if name in data : 
                 data[name].setColor((0.6, 0.0, 0.4, 1)) 
                 tracks[row[0]][row[1] + "-" + row[2]].setColor((0.6, 0.0, 0.4, 1))
         elif(row[3] == 'too old'  and not skipping) :
-            # change item color if too old packet
             if name in data : 
                 data[name].setColor((0.6, 0.2, 0.2, 1)) 
                 tracks[row[0]][row[1] + "-" + row[2]].setColor((0.6, 0.2, 0.2, 1))
@@ -203,7 +221,6 @@ for row in f:
         cpuTrack[cpuLogCount] = rowData(cpuLogCount, value=float(row[4]), sender_ts=int(row[2]), color=color)
         cpuLogCount += 1
 
-
 if wshfile :
     for row in wshf :
         row = row.strip('\n').split(';') 
@@ -214,7 +231,6 @@ if wshfile :
                 print('a')
                 tracks[row[0]][name].retransmissions = int(row[4])
 
-# filter cpu logs with timestamp greater than last valid packet log sender_ts
 i = -1
 lastTS = None
 while lastTS is None and cpuLogCount + i > 0 :    
@@ -228,7 +244,9 @@ if cpulog :
     additional_axs += 1
 if wshfile :
     additional_axs += 1
-    
+if showLost:
+    additional_axs += 1
+
 if len(tracks) == 0 :
     print("No tracks found, program will exit") 
     exit()
@@ -312,7 +330,15 @@ elif (len(tracks) == 1) :
     ylen = top - bottom 
     if maxheight < 0 and (totalJitter * 1.9 / len(data)) > 10 : 
         axs[1].set_ylim(0, totalJitter / len(tracks[key]))
-    
+
+    # ---- PATCH: cumulative lost packets subplot ----
+    if showLost:
+        x_lost, y_lost = build_cumulative_lost(tracks, startTS)
+        axs[-1].step(x_lost, y_lost, where='post', color='tab:red', label='Cumulative Lost Packets')
+        axs[-1].set_ylabel('Cumulative\nlost packets', fontsize=12)
+        axs[-1].set_xlabel('Time in seconds', fontsize=12)
+        axs[-1].legend()
+
 else :
     fig, axs = plt.subplots(len(tracks)*2 + 1 + additional_axs, figsize=(14, 9), sharex = sharex)
     fig.suptitle('moq-js latency test', fontsize = 20)
@@ -417,7 +443,15 @@ else :
     props = {"rotation" : 45, "visible" : True}
     for ax in axs : 
         plt.setp(ax.get_xticklabels(), **props)
+
+    # ---- PATCH: cumulative lost packets subplot ----
+    if showLost:
+        x_lost, y_lost = build_cumulative_lost(tracks, startTS)
+        axs[-1].step(x_lost, y_lost, where='post', color='tab:red', label='Cumulative Lost Packets')
+        axs[-1].set_ylabel('Cumulative\nlost packets', fontsize=12)
+        axs[-1].set_xlabel('Time in seconds', fontsize=12)
+        axs[-1].legend()
+
 plt.subplots_adjust(left = 0.07, right = 0.975, hspace = 0.85)
 print("Total packets:", totalPackets, "\nTotal not received packets:", totalNotReceived)
-# plt.legend() 
 plt.show() 

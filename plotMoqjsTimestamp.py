@@ -69,12 +69,6 @@ class rowData:
     def isReceived(self):
         return self.receiver_ts is not None
 
-def getIndex(li, target):
-    for index, x in enumerate(li):
-        if x.name == target:
-            return index
-    return -1
-
 def build_cumulatives(tracks, startTS, data):
     entries = []
     for track in tracks.values():
@@ -115,9 +109,10 @@ data = {}
 tracks = {}
 cpuTrack = {}
 names = {}
+
 argParser = argparse.ArgumentParser(prog='plotMoqjsTimestamp.py',
-                    description='Program that allows to plot moq-js logger data',
-                    epilog='By Alessandro Bottisio')
+    description='Program that allows to plot moq-js logger data',
+    epilog='By Alessandro Bottisio')
 argParser.add_argument('-f', '--file', required=False)
 argParser.add_argument('-wpf', '--wshparsedfile', required=False)
 argParser.add_argument('-sks', '--skipstart', required=False)
@@ -206,65 +201,86 @@ for row in f:
     row = row.strip('\n').split(';')
     if row[0].isnumeric():
         name = row[0] + "-" + row[1] + "-" + row[2]
+        track_id = row[0]
+        elem_id = row[1] + "-" + row[2]
         if 4 < len(row) and row[4].isnumeric() and int(row[2]) > 0 and row[1].isnumeric() and (header == 'true' or (header == 'false' and int(row[1]) > 0) or (header == 'only' and int(row[1]) == 0)):
             if packetCount >= skip and packetCount <= skipend:
                 skipping = False
             else:
                 skipping = True
             if (not skipping) and ((audio_row == row[0] and packetCount >= skip) or (video_row == row[0] and (int(audio_row) > 0 or (int(audio_row) < 0 and packetCount >= skip)))):
-                if row[0] not in tracks:
-                    tracks[row[0]] = {}
+                if track_id not in tracks:
+                    tracks[track_id] = {}
                 if(row[3] == 'sent'):
                     if startTS == 0:
                         startTS = int(row[4])
-                    last_ts_by_track[row[0]] = int(row[4])  # Patch: aggiorna last_ts!
+                    last_ts_by_track[track_id] = int(row[4])
                     if name in data:
                         data[name].setSenderTS(int(row[4]))
-                        tracks[row[0]][row[1] + "-" + row[2]].setSenderTS(int(row[4]))
+                        tracks[track_id][elem_id].setSenderTS(int(row[4]))
                     else:
-                        data[name] = rowData(name, sender_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))
-                        tracks[row[0]][row[1] + "-" + row[2]] = rowData(row[1] + "-" + row[2], sender_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))
+                        data[name] = rowData(name, sender_ts=int(row[4]), color=None)
+                        tracks[track_id][elem_id] = rowData(elem_id, sender_ts=int(row[4]), color=None)
                     if(5 < len(row) and row[5].isnumeric()):
                         data[name].setSenderJitter(int(row[5]))
-                        tracks[row[0]][row[1] + "-" + row[2]].setSenderJitter(int(row[5]))
+                        tracks[track_id][elem_id].setSenderJitter(int(row[5]))
                 elif(row[3] == 'received'):
                     if(name in data):
                         data[name].setReceiverTS(int(row[4]))
-                        tracks[row[0]][row[1] + "-" + row[2]].setReceiverTS(int(row[4]))
+                        tracks[track_id][elem_id].setReceiverTS(int(row[4]))
                     else:
-                        data[name] = rowData(name, receiver_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))
-                        tracks[row[0]][row[1] + "-" + row[2]] = rowData(row[1] + "-" + row[2], receiver_ts=int(row[4]), color=(0.1, 0.1, 0.8, 1))
+                        data[name] = rowData(name, receiver_ts=int(row[4]), color=None)
+                        tracks[track_id][elem_id] = rowData(elem_id, receiver_ts=int(row[4]), color=None)
                     if(5 < len(row) and row[5].isnumeric()):
                         data[name].setReceiverJitter(int(row[5]))
-                        tracks[row[0]][row[1] + "-" + row[2]].setReceiverJitter(int(row[5]))
-                if name in data and int(data[name].getLatency()) > 35:
-                    data[name].setColor((0.8, 0.1, 0.1, 1))
-                    tracks[row[0]][row[1] + "-" + row[2]].setColor((0.8, 0.1, 0.1, 1))
+                        tracks[track_id][elem_id].setReceiverJitter(int(row[5]))
+
+                # SOLO QUI: setta il colore blu SOLO se non era già too_old/too_slow/colorato!
+                if data[name].isTooOld():
+                    data[name].setColor(COLORS["too_old"])
+                elif data[name].isTooSlow():
+                    data[name].setColor(COLORS["too_slow"])
+                elif data[name].getColor() is None:
+                    data[name].setColor((0.1, 0.1, 0.8, 1))
+                if tracks[track_id][elem_id].isTooOld():
+                    tracks[track_id][elem_id].setColor(COLORS["too_old"])
+                elif tracks[track_id][elem_id].isTooSlow():
+                    tracks[track_id][elem_id].setColor(COLORS["too_slow"])
+                elif tracks[track_id][elem_id].getColor() is None:
+                    tracks[track_id][elem_id].setColor((0.1, 0.1, 0.8, 1))
+
             if (audio_row == row[0] and int(audio_row) > 0) or (video_row == row[0] and int(video_row) < 0 and int(video_row) > 0): packetCount += 1
+
         elif(row[3] == 'too slow' and not skipping):
-            ts = int(row[4]) if len(row) > 4 and row[4].isnumeric() else last_ts_by_track.get(row[0], None)
+            ts = int(row[4]) if len(row) > 4 and row[4].isnumeric() else last_ts_by_track.get(track_id, None)
             if name not in data:
                 data[name] = rowData(name, sender_ts=ts, color=COLORS["too_slow"], tooSlow=True)
-                if row[0] not in tracks:
-                    tracks[row[0]] = {}
-                tracks[row[0]][row[1] + "-" + row[2]] = rowData(row[1] + "-" + row[2], sender_ts=ts, color=COLORS["too_slow"], tooSlow=True)
             else:
                 data[name].setColor(COLORS["too_slow"])
                 data[name].setTooSlow(True)
-                tracks[row[0]][row[1] + "-" + row[2]].setColor(COLORS["too_slow"])
-                tracks[row[0]][row[1] + "-" + row[2]].setTooSlow(True)
+            if track_id not in tracks:
+                tracks[track_id] = {}
+            if elem_id not in tracks[track_id]:
+                tracks[track_id][elem_id] = rowData(elem_id, sender_ts=ts, color=COLORS["too_slow"], tooSlow=True)
+            else:
+                tracks[track_id][elem_id].setColor(COLORS["too_slow"])
+                tracks[track_id][elem_id].setTooSlow(True)
+
         elif(row[3] == 'too old' and not skipping):
-            ts = int(row[4]) if len(row) > 4 and row[4].isnumeric() else last_ts_by_track.get(row[0], None)
+            ts = int(row[4]) if len(row) > 4 and row[4].isnumeric() else last_ts_by_track.get(track_id, None)
             if name not in data:
                 data[name] = rowData(name, sender_ts=ts, color=COLORS["too_old"], tooOld=True)
-                if row[0] not in tracks:
-                    tracks[row[0]] = {}
-                tracks[row[0]][row[1] + "-" + row[2]] = rowData(row[1] + "-" + row[2], sender_ts=ts, color=COLORS["too_old"], tooOld=True)
             else:
                 data[name].setColor(COLORS["too_old"])
                 data[name].setTooOld(True)
-                tracks[row[0]][row[1] + "-" + row[2]].setColor(COLORS["too_old"])
-                tracks[row[0]][row[1] + "-" + row[2]].setTooOld(True)
+            if track_id not in tracks:
+                tracks[track_id] = {}
+            if elem_id not in tracks[track_id]:
+                tracks[track_id][elem_id] = rowData(elem_id, sender_ts=ts, color=COLORS["too_old"], tooOld=True)
+            else:
+                tracks[track_id][elem_id].setColor(COLORS["too_old"])
+                tracks[track_id][elem_id].setTooOld(True)
+
         elif(row[3] == 'AUDIO'):
             names[row[0]] = 'Audio'
             audio_row = row[0]
@@ -335,39 +351,48 @@ elif (len(tracks) == 1):
         startAxis += 1
 
     axs[startAxis].set_title("All packets")
+    first_name = None
     for key in names:
-        if (key.isnumeric()):
-            axs[startAxis].set_ylabel(names[key] + ' latency\n(ms)', fontsize=12)
-            axs[startAxis + 1].set_ylabel(names[key] + ' jitter\n(ms)(tx)', fontsize=12)
+        if key.isnumeric():
+            first_name = names[key]
+            axs[startAxis].set_ylabel(first_name + ' latency\n(ms)', fontsize=12)
+            # Imposta label solo se esiste il subplot per la jitter!
+            if (startAxis + 1) < len(axs):
+                axs[startAxis + 1].set_ylabel(first_name + ' jitter\n(ms)(tx)', fontsize=12)
+
     for index, key in enumerate(tracks):
         for elem in tracks[key].values():
             totalPackets += 1
-            # PACCHETTI PERSI (non ricevuti)
+            if elem.sender_ts is None:
+                continue
             if elem.isReceived() == False:
                 axs[startAxis].bar(
                     (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
                     1,
                     color=COLORS["lost"]
                 )
-                print("Packet not received for entry", elem.name, "of track", key)
                 totalNotReceived += 1
-                continue  # Non disegnare la barra normale
+                continue
             else:
-                if elem.isSent() == False:
-                    print("Empty sender timestamp value for entry", elem.name, "of track", key)
-                else:
+                # Colorazione corretta:
+                if elem.isTooOld():
+                    bar_color = COLORS["too_old"]
+                elif elem.isTooSlow():
+                    bar_color = COLORS["too_slow"]
+                elif elem.color is not None:
                     bar_color = elem.color
-                    if elem.isTooOld():
-                        bar_color = COLORS["too_old"]
-                    elif elem.isTooSlow():
-                        bar_color = COLORS["too_slow"]
-                    axs[startAxis].bar(
-                        (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                        elem.latency,
-                        color=bar_color
-                    )
-                    totalLatency += elem.latency
-                    if elem.sender_jitter == None:
+                else:
+                    bar_color = (0.1, 0.1, 0.8, 1)
+                axs[startAxis].bar(
+                    (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                    elem.latency,
+                    color=bar_color
+                )
+                totalLatency += elem.latency
+
+                # Jitter SOLO SE IL SUBPLOT ESISTE
+                if (startAxis + 1) < len(axs):
+                    if elem.sender_jitter is None:
                         elem.setSenderJitter(0)
                     axs[startAxis + 1].bar(
                         (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
@@ -378,17 +403,18 @@ elif (len(tracks) == 1):
                         totalJitter += 100
                     else:
                         totalJitter += elem.sender_jitter
-                    if wshfile:
-                        axs[-additional_axs].bar(
-                            (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                            elem.retransmissions,
-                            color=bar_color
-                        )
-                        if elem.retransmissions > maxRetransmissions:
-                            maxRetransmissions = elem.retransmissions
+
+                if wshfile:
+                    axs[-additional_axs].bar(
+                        (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                        elem.retransmissions,
+                        color=bar_color
+                    )
+                    if elem.retransmissions > maxRetransmissions:
+                        maxRetransmissions = elem.retransmissions
 
     for elem in cpuTrack.values():
-        if cpulog:
+        if cpulog and elem.sender_ts is not None:
             axs[-1].bar(
                 (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
                 elem.value,
@@ -435,6 +461,8 @@ else:
                     bar_color = COLORS["too_old"]
                 elif elem.isTooSlow():
                     bar_color = COLORS["too_slow"]
+                elif bar_color is None:
+                    bar_color = (0.1, 0.1, 0.8, 1)
                 axs[0].bar(
                     (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
                     elem.latency,
@@ -453,49 +481,49 @@ else:
         totalJitter = 0
         for elem in tracks[key].values():
             totalPackets += 1
+            if elem.sender_ts is None:
+                continue
             if elem.isReceived() == False:
                 axs[(index + 1) * 2 - 1].bar(
                     (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
                     1,
                     color=COLORS["lost"]
                 )
-                print("Packet not received for entry", elem.name, "of track", key)
                 totalNotReceived += 1
                 continue
             else:
-                if elem.isSent() == False:
-                    print("Empty sender timestamp value for entry", elem.name, "of track", key)
+                bar_color = elem.color
+                if elem.isTooOld():
+                    bar_color = COLORS["too_old"]
+                elif elem.isTooSlow():
+                    bar_color = COLORS["too_slow"]
+                elif bar_color is None:
+                    bar_color = (0.1, 0.1, 0.8, 1)
+                axs[(index + 1) * 2 - 1].bar(
+                    (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                    elem.latency,
+                    color=bar_color
+                )
+                totalLatency += elem.latency
+                if elem.sender_jitter is None:
+                    elem.setSenderJitter(0)
+                axs[(index + 1) * 2].bar(
+                    (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                    elem.sender_jitter,
+                    color=bar_color
+                )
+                if elem.sender_jitter > 100 and maxheight < 0:
+                    totalJitter += 100
                 else:
-                    bar_color = elem.color
-                    if elem.isTooOld():
-                        bar_color = COLORS["too_old"]
-                    elif elem.isTooSlow():
-                        bar_color = COLORS["too_slow"]
-                    axs[(index + 1) * 2 - 1].bar(
+                    totalJitter += elem.sender_jitter
+                if wshfile:
+                    axs[-additional_axs].bar(
                         (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                        elem.latency,
+                        elem.retransmissions,
                         color=bar_color
                     )
-                    totalLatency += elem.latency
-                    if elem.sender_jitter == None:
-                        elem.setSenderJitter(0)
-                    axs[(index + 1) * 2].bar(
-                        (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                        elem.sender_jitter,
-                        color=bar_color
-                    )
-                    if elem.sender_jitter > 100 and maxheight < 0:
-                        totalJitter += 100
-                    else:
-                        totalJitter += elem.sender_jitter
-                    if wshfile:
-                        axs[-additional_axs].bar(
-                            (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                            elem.retransmissions,
-                            color=bar_color
-                        )
-                        if elem.retransmissions > maxRetransmissions:
-                            maxRetransmissions = elem.retransmissions
+                    if elem.retransmissions > maxRetransmissions:
+                        maxRetransmissions = elem.retransmissions
 
         if not cpulog and not wshfile: axs[-1].set_xlabel('Time in seconds', fontsize=12)
         axs[(index + 1) * 2 - 1].set_ylabel(names[key] + '\nlatency (ms)', fontsize=12)
@@ -516,7 +544,7 @@ else:
             axs[(index + 1) * 2].set_ylim(0, 10)
 
     for elem in cpuTrack.values():
-        if cpulog:
+        if cpulog and elem.sender_ts is not None:
             axs[-1].bar(
                 (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
                 elem.value,

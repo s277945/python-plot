@@ -74,9 +74,9 @@ def build_cumulatives(tracks, startTS, data):
     for track in tracks.values():
         for elem in track.values():
             if elem.sender_ts is not None:
-                lost = not elem.isReceived()
-                tooold = elem.isTooOld()
-                tooslow = elem.isTooSlow()
+                lost = not elem.isReceived() and not elem.isTooOld() and not elem.isTooSlow()
+                tooold = elem.isTooOld() and not elem.isReceived()
+                tooslow = elem.isTooSlow() and not elem.isReceived()
                 entries.append((elem.sender_ts, lost, tooold, tooslow))
     entries.sort()
     x = []
@@ -235,20 +235,6 @@ for row in f:
                         data[name].setReceiverJitter(int(row[5]))
                         tracks[track_id][elem_id].setReceiverJitter(int(row[5]))
 
-                # SOLO QUI: setta il colore blu SOLO se non era già too_old/too_slow/colorato!
-                if data[name].isTooOld():
-                    data[name].setColor(COLORS["too_old"])
-                elif data[name].isTooSlow():
-                    data[name].setColor(COLORS["too_slow"])
-                elif data[name].getColor() is None:
-                    data[name].setColor((0.1, 0.1, 0.8, 1))
-                if tracks[track_id][elem_id].isTooOld():
-                    tracks[track_id][elem_id].setColor(COLORS["too_old"])
-                elif tracks[track_id][elem_id].isTooSlow():
-                    tracks[track_id][elem_id].setColor(COLORS["too_slow"])
-                elif tracks[track_id][elem_id].getColor() is None:
-                    tracks[track_id][elem_id].setColor((0.1, 0.1, 0.8, 1))
-
             if (audio_row == row[0] and int(audio_row) > 0) or (video_row == row[0] and int(video_row) < 0 and int(video_row) > 0): packetCount += 1
 
         elif(row[3] == 'too slow' and not skipping):
@@ -356,7 +342,6 @@ elif (len(tracks) == 1):
         if key.isnumeric():
             first_name = names[key]
             axs[startAxis].set_ylabel(first_name + ' latency\n(ms)', fontsize=12)
-            # Imposta label solo se esiste il subplot per la jitter!
             if (startAxis + 1) < len(axs):
                 axs[startAxis + 1].set_ylabel(first_name + ' jitter\n(ms)(tx)', fontsize=12)
 
@@ -373,45 +358,41 @@ elif (len(tracks) == 1):
                 )
                 totalNotReceived += 1
                 continue
+            # *** Gestione colore: decidi SOLO qui! ***
+            if elem.isTooOld():
+                bar_color = COLORS["too_old"]
+            elif elem.isTooSlow():
+                bar_color = COLORS["too_slow"]
             else:
-                # Colorazione corretta:
-                if elem.isTooOld():
-                    bar_color = COLORS["too_old"]
-                elif elem.isTooSlow():
-                    bar_color = COLORS["too_slow"]
-                elif elem.color is not None:
-                    bar_color = elem.color
-                else:
-                    bar_color = (0.1, 0.1, 0.8, 1)
-                axs[startAxis].bar(
+                bar_color = (0.1, 0.1, 0.8, 1)
+            axs[startAxis].bar(
+                (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                elem.latency,
+                color=bar_color
+            )
+            totalLatency += elem.latency
+
+            if (startAxis + 1) < len(axs):
+                if elem.sender_jitter is None:
+                    elem.setSenderJitter(0)
+                axs[startAxis + 1].bar(
                     (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                    elem.latency,
+                    elem.sender_jitter,
                     color=bar_color
                 )
-                totalLatency += elem.latency
+                if elem.sender_jitter > 100 and maxheight < 0:
+                    totalJitter += 100
+                else:
+                    totalJitter += elem.sender_jitter
 
-                # Jitter SOLO SE IL SUBPLOT ESISTE
-                if (startAxis + 1) < len(axs):
-                    if elem.sender_jitter is None:
-                        elem.setSenderJitter(0)
-                    axs[startAxis + 1].bar(
-                        (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                        elem.sender_jitter,
-                        color=bar_color
-                    )
-                    if elem.sender_jitter > 100 and maxheight < 0:
-                        totalJitter += 100
-                    else:
-                        totalJitter += elem.sender_jitter
-
-                if wshfile:
-                    axs[-additional_axs].bar(
-                        (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                        elem.retransmissions,
-                        color=bar_color
-                    )
-                    if elem.retransmissions > maxRetransmissions:
-                        maxRetransmissions = elem.retransmissions
+            if wshfile:
+                axs[-additional_axs].bar(
+                    (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                    elem.retransmissions,
+                    color=bar_color
+                )
+                if elem.retransmissions > maxRetransmissions:
+                    maxRetransmissions = elem.retransmissions
 
     for elem in cpuTrack.values():
         if cpulog and elem.sender_ts is not None:
@@ -430,7 +411,7 @@ elif (len(tracks) == 1):
     if cpulog:
         axs[-1].set_xlabel('Time in seconds', fontsize=12)
         axs[-1].set_ylabel('CPU usage\n(%)', fontsize=12)
-    if not cpulog and not wshfile: axs[1].set_xlabel('Time in seconds', fontsize=12)
+    if not cpulog and not wshfile and (1 < len(axs)): axs[1].set_xlabel('Time in seconds', fontsize=12)
     for ax in (axs.flat if hasattr(axs, "flat") else axs):
         set_dynamic_max_xticks(ax, fig, min_tick_spacing=min_tick_spacing)
 
@@ -456,12 +437,11 @@ else:
         axs[0].set_ylabel('Latency\n(ms)', fontsize=12)
         for key, elem in data.items():
             if elem.sender_ts is not None:
-                bar_color = elem.color
                 if elem.isTooOld():
                     bar_color = COLORS["too_old"]
                 elif elem.isTooSlow():
                     bar_color = COLORS["too_slow"]
-                elif bar_color is None:
+                else:
                     bar_color = (0.1, 0.1, 0.8, 1)
                 axs[0].bar(
                     (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
@@ -491,39 +471,37 @@ else:
                 )
                 totalNotReceived += 1
                 continue
+            if elem.isTooOld():
+                bar_color = COLORS["too_old"]
+            elif elem.isTooSlow():
+                bar_color = COLORS["too_slow"]
             else:
-                bar_color = elem.color
-                if elem.isTooOld():
-                    bar_color = COLORS["too_old"]
-                elif elem.isTooSlow():
-                    bar_color = COLORS["too_slow"]
-                elif bar_color is None:
-                    bar_color = (0.1, 0.1, 0.8, 1)
-                axs[(index + 1) * 2 - 1].bar(
+                bar_color = (0.1, 0.1, 0.8, 1)
+            axs[(index + 1) * 2 - 1].bar(
+                (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                elem.latency,
+                color=bar_color
+            )
+            totalLatency += elem.latency
+            if elem.sender_jitter is None:
+                elem.setSenderJitter(0)
+            axs[(index + 1) * 2].bar(
+                (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
+                elem.sender_jitter,
+                color=bar_color
+            )
+            if elem.sender_jitter > 100 and maxheight < 0:
+                totalJitter += 100
+            else:
+                totalJitter += elem.sender_jitter
+            if wshfile:
+                axs[-additional_axs].bar(
                     (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                    elem.latency,
+                    elem.retransmissions,
                     color=bar_color
                 )
-                totalLatency += elem.latency
-                if elem.sender_jitter is None:
-                    elem.setSenderJitter(0)
-                axs[(index + 1) * 2].bar(
-                    (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                    elem.sender_jitter,
-                    color=bar_color
-                )
-                if elem.sender_jitter > 100 and maxheight < 0:
-                    totalJitter += 100
-                else:
-                    totalJitter += elem.sender_jitter
-                if wshfile:
-                    axs[-additional_axs].bar(
-                        (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                        elem.retransmissions,
-                        color=bar_color
-                    )
-                    if elem.retransmissions > maxRetransmissions:
-                        maxRetransmissions = elem.retransmissions
+                if elem.retransmissions > maxRetransmissions:
+                    maxRetransmissions = elem.retransmissions
 
         if not cpulog and not wshfile: axs[-1].set_xlabel('Time in seconds', fontsize=12)
         axs[(index + 1) * 2 - 1].set_ylabel(names[key] + '\nlatency (ms)', fontsize=12)

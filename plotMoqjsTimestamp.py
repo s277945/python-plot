@@ -161,6 +161,23 @@ def simulated_latency_for_track(track, idx, all_indices, lost_height_mode):
         if received_latencies:
             return np.mean(received_latencies)
         return np.mean(latencies) if len(latencies) else 1000
+    elif lost_height_mode == 'last5_mean':
+        # Media degli ultimi 5 pacchetti ricevuti (rispetto a idx)
+        sorted_packets = sorted([(i, e) for i, e in zip(all_indices, packets)], key=lambda x: x[0])
+        pos = None
+        for i, (ix, elem) in enumerate(sorted_packets):
+            if ix == idx:
+                pos = i
+                break
+        received_latencies = []
+        j = pos - 1
+        while j >= 0 and len(received_latencies) < 5:
+            if sorted_packets[j][1].isReceived():
+                received_latencies.append(sorted_packets[j][1].latency)
+            j -= 1
+        if received_latencies:
+            return np.mean(received_latencies)
+        return np.mean(latencies) if len(latencies) else 1000
     return 1000
 
 # --- MAIN SCRIPT ---
@@ -185,8 +202,8 @@ argParser.add_argument('-shl', '--showlost', required=False)
 argParser.add_argument('-sf', '--savefile', required=False)
 argParser.add_argument('-mts', '--min_tick_spacing', required=False, type=int, default=80,
     help="Spazio minimo in pixel tra le etichette dell'asse X (default 80)")
-argParser.add_argument('-lsth', '--lost_height', choices=['1', 'infinite', 'max_plus_50', 'mean_jitter_plus_2std', 'avg_neighbor', 'last10_mean'],
-    default='1', help="Come visualizzare i lost (1, infinite, max_plus_50, mean_jitter_plus_2std, avg_neighbor, last10_mean)")
+argParser.add_argument('-lsth', '--lost_height', choices=['1', 'infinite', 'max_plus_50', 'mean_jitter_plus_2std', 'avg_neighbor', 'last10_mean', 'last5_mean'],
+    default='1', help="Come visualizzare i lost (1, infinite, max_plus_50, mean_jitter_plus_2std, avg_neighbor, last10_mean, last5_mean)")
 args = argParser.parse_args()
 
 min_tick_spacing = args.min_tick_spacing if hasattr(args, 'min_tick_spacing') else 80

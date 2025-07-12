@@ -22,7 +22,7 @@ def worker(logfile):
         "-shl", "true",
         "-f", logfile,
         "-sf", "true",
-        ""
+        "-lsth", "last5_mean"
     ])
     # Sposta il file se prodotto in cwd
     if os.path.exists(outname):

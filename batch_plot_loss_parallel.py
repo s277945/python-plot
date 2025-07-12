@@ -21,7 +21,8 @@ def worker(logfile):
         "-mh", "auto",
         "-shl", "true",
         "-f", logfile,
-        "-sf", "true"
+        "-sf", "true",
+        ""
     ])
     # Sposta il file se prodotto in cwd
     if os.path.exists(outname):

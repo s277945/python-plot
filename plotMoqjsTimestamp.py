@@ -4,7 +4,6 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 import argparse
-from matplotlib.ticker import MaxNLocator
 
 COLORS = {
     "lost": "tab:red",
@@ -94,19 +93,75 @@ def build_cumulatives(tracks, startTS, data):
         tooslow_y.append(tooslow_cnt)
     return x, lost_y, tooold_y, tooslow_y
 
-# --- Dynamic and equidistant xticks on all axes ---
-def set_all_xticks(axs, x_positions, x_labels, ax_width=10, min_tick_spacing_px=90):
+def set_all_xticks(axs, x_positions, x_labels, min_tick_spacing_px=80):
     fig = axs[0].figure
     bbox = axs[0].get_window_extent().transformed(fig.dpi_scale_trans.inverted())
     width_inch = bbox.width
     width_px = width_inch * fig.dpi
     show_every = max(1, int(np.ceil(len(x_labels) / max(2, width_px // min_tick_spacing_px))))
     indices = [i for i in range(len(x_labels)) if i % show_every == 0]
-    labels = [x_labels[i] for i in indices]  # solo label che voglio
+    labels = [x_labels[i] for i in indices]
     for ax in axs:
         ax.set_xticks(indices)
         ax.set_xticklabels(labels, rotation=45, ha='right')
         ax.xaxis.set_tick_params(labelbottom=True)
+
+def simulated_latency_for_track(track, idx, all_indices, lost_height_mode):
+    latencies = [e.latency for e in track.values() if e.isReceived() and e.latency > 0]
+    jitters = [e.sender_jitter for e in track.values() if e.isReceived() and e.sender_jitter is not None]
+    packets = list(track.values())
+    # Ordina le chiavi degli indici
+    sorted_ix = sorted(all_indices)
+    if lost_height_mode == 'max_plus_50':
+        if len(latencies) == 0:
+            return 1000
+        return max(latencies) + 50
+    elif lost_height_mode == 'mean_jitter_plus_2std':
+        mean_jitter = np.mean(jitters) if len(jitters) else 0
+        std_latency = np.std(latencies) if len(latencies) else 0
+        return mean_jitter + 2*std_latency
+    elif lost_height_mode == 'avg_neighbor':
+        # Trova la posizione nella sequenza ordinata
+        sorted_packets = sorted([(i, e) for i, e in zip(all_indices, track.values())], key=lambda x: x[0])
+        pos = None
+        for i, (ix, elem) in enumerate(sorted_packets):
+            if ix == idx:
+                pos = i
+                break
+        prev_lat = next_lat = None
+        # Cerca il precedente ricevuto
+        for j in range(pos-1, -1, -1):
+            if sorted_packets[j][1].isReceived():
+                prev_lat = sorted_packets[j][1].latency
+                break
+        # Cerca il successivo ricevuto
+        for j in range(pos+1, len(sorted_packets)):
+            if sorted_packets[j][1].isReceived():
+                next_lat = sorted_packets[j][1].latency
+                break
+        vals = []
+        if prev_lat is not None: vals.append(prev_lat)
+        if next_lat is not None: vals.append(next_lat)
+        if vals: return np.mean(vals)
+        return np.mean(latencies) if len(latencies) else 1000
+    elif lost_height_mode == 'last10_mean':
+        # Media degli ultimi 10 pacchetti ricevuti (rispetto a idx)
+        sorted_packets = sorted([(i, e) for i, e in zip(all_indices, packets)], key=lambda x: x[0])
+        pos = None
+        for i, (ix, elem) in enumerate(sorted_packets):
+            if ix == idx:
+                pos = i
+                break
+        received_latencies = []
+        j = pos - 1
+        while j >= 0 and len(received_latencies) < 10:
+            if sorted_packets[j][1].isReceived():
+                received_latencies.append(sorted_packets[j][1].latency)
+            j -= 1
+        if received_latencies:
+            return np.mean(received_latencies)
+        return np.mean(latencies) if len(latencies) else 1000
+    return 1000
 
 # --- MAIN SCRIPT ---
 data = {}
@@ -128,11 +183,14 @@ argParser.add_argument('-lsl', '--logslow', required=False)
 argParser.add_argument('-phd', '--pheader', required=False)
 argParser.add_argument('-shl', '--showlost', required=False)
 argParser.add_argument('-sf', '--savefile', required=False)
-argParser.add_argument('--min_tick_spacing', required=False, type=int, default=80,
+argParser.add_argument('-mts', '--min_tick_spacing', required=False, type=int, default=80,
     help="Spazio minimo in pixel tra le etichette dell'asse X (default 80)")
+argParser.add_argument('-lsth', '--lost_height', choices=['1', 'infinite', 'max_plus_50', 'mean_jitter_plus_2std', 'avg_neighbor', 'last10_mean'],
+    default='1', help="Come visualizzare i lost (1, infinite, max_plus_50, mean_jitter_plus_2std, avg_neighbor, last10_mean)")
 args = argParser.parse_args()
 
 min_tick_spacing = args.min_tick_spacing if hasattr(args, 'min_tick_spacing') else 80
+lost_height_mode = args.lost_height
 
 if args.file is not None and args.file != "":
     filename = args.file
@@ -342,7 +400,6 @@ if len(tracks) == 0:
     print("No tracks found, program will exit")
     exit()
 elif (len(tracks) == 1):
-    # single track
     n_plots = 2 + additional_axs
     if showLost:
         n_plots += 1
@@ -352,9 +409,6 @@ elif (len(tracks) == 1):
     maxRetransmissions = 0
     totalPackets = 0
     totalNotReceived = 0
-    totalLatency = 0
-    totalJitter = 0
-    totalCPU = 0
     plotIdx = 0
 
     if showLost:
@@ -389,15 +443,24 @@ elif (len(tracks) == 1):
             if elem.sender_ts is None:
                 continue
             idx = x_pos_map[(elem.sender_ts - startTS) / 1000]
-            # Persi
-            if elem.isReceived() == False:
+            if not elem.isReceived():
                 if elem.isTooOld():
                     bar_color = COLORS["too_old"]
                 elif elem.isTooSlow():
                     bar_color = COLORS["too_slow"]
                 else:
                     bar_color = COLORS["lost"]
-                axs[plotIdx].bar(idx, 1, color=bar_color)
+                if lost_height_mode == 'infinite':
+                    axs[plotIdx].relim()
+                    axs[plotIdx].autoscale_view()
+                    ylim = axs[plotIdx].get_ylim()
+                    height = ylim[1] * 0.98 if ylim[1] > 1 else 100
+                elif lost_height_mode == '1':
+                    height = 1
+                else:
+                    all_indices = [x_pos_map[(e.sender_ts - startTS) / 1000] for e in tracks[key].values() if e.sender_ts is not None]
+                    height = simulated_latency_for_track(tracks[key], idx, all_indices, lost_height_mode)
+                axs[plotIdx].bar(idx, height, color=bar_color)
                 totalNotReceived += 1
                 continue
             else:
@@ -412,7 +475,6 @@ elif (len(tracks) == 1):
                 latency_x.append(idx)
                 latency_y.append(elem.latency)
                 latency_c.append(bar_color)
-                # Jitter
                 if (plotIdx + 1) < len(axs):
                     if elem.sender_jitter is None:
                         elem.setSenderJitter(0)
@@ -423,7 +485,6 @@ elif (len(tracks) == 1):
         if (plotIdx + 1) < len(axs):
             axs[plotIdx + 1].bar(jitter_x, jitter_y, color=jitter_c)
 
-    # Retransmission e cpu
     if wshfile:
         axs[-additional_axs].set_xlabel('Time in seconds', fontsize=12)
         axs[-additional_axs].set_ylabel('Number of retransmissions', fontsize=12)
@@ -434,7 +495,6 @@ elif (len(tracks) == 1):
     set_all_xticks(axs, all_x_floats, all_x_labels, min_tick_spacing_px=min_tick_spacing)
     axs[-1].set_xlabel("Time in seconds")
 else:
-    # multi track
     n_tracks = len(tracks)
     n_plots = n_tracks * 2 + 1 + additional_axs
     fig, axs = plt.subplots(n_plots, figsize=(18, 10), sharex=True)
@@ -443,7 +503,6 @@ else:
     maxRetransmissions = 0
     totalPackets = 0
     totalNotReceived = 0
-
     plotIdx = 0
 
     if showLost:
@@ -478,7 +537,6 @@ else:
         axs[0].bar(latency_x, latency_y, color=latency_c)
         plotIdx += 1
 
-    # Per ogni track: latency + jitter
     for index, key in enumerate(tracks):
         latency_x = []
         latency_y = []
@@ -491,14 +549,24 @@ else:
             if elem.sender_ts is None:
                 continue
             idx = x_pos_map[(elem.sender_ts - startTS) / 1000]
-            if elem.isReceived() == False:
+            if not elem.isReceived():
                 if elem.isTooOld():
                     bar_color = COLORS["too_old"]
                 elif elem.isTooSlow():
                     bar_color = COLORS["too_slow"]
                 else:
                     bar_color = COLORS["lost"]
-                axs[plotIdx].bar(idx, 1, color=bar_color)
+                if lost_height_mode == 'infinite':
+                    axs[plotIdx].relim()
+                    axs[plotIdx].autoscale_view()
+                    ylim = axs[plotIdx].get_ylim()
+                    height = ylim[1] * 0.98 if ylim[1] > 1 else 100
+                elif lost_height_mode == '1':
+                    height = 1
+                else:
+                    all_indices = [x_pos_map[(e.sender_ts - startTS) / 1000] for e in tracks[key].values() if e.sender_ts is not None]
+                    height = simulated_latency_for_track(tracks[key], idx, all_indices, lost_height_mode)
+                axs[plotIdx].bar(idx, height, color=bar_color)
                 totalNotReceived += 1
                 continue
             else:

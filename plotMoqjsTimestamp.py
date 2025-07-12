@@ -88,23 +88,27 @@ def build_cumulatives(tracks, startTS, data):
         if lost: lost_cnt += 1
         if tooold: tooold_cnt += 1
         if tooslow: tooslow_cnt += 1
-        x.append(str((ts - startTS)/1000))
+        x.append((ts - startTS)/1000)
         lost_y.append(lost_cnt)
         tooold_y.append(tooold_cnt)
         tooslow_y.append(tooslow_cnt)
     return x, lost_y, tooold_y, tooslow_y
 
-def set_dynamic_max_xticks(ax, fig, min_tick_spacing=100):
-    try:
-        bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
-        width_inch = bbox.width
-        width_px = width_inch * fig.dpi
-        max_ticks = max(2, int(width_px // min_tick_spacing))
-        ax.xaxis.set_major_locator(MaxNLocator(nbins=max_ticks))
-        plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
-    except Exception:
-        pass
+# --- Dynamic and equidistant xticks on all axes ---
+def set_all_xticks(axs, x_positions, x_labels, ax_width=10, min_tick_spacing_px=90):
+    fig = axs[0].figure
+    bbox = axs[0].get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+    width_inch = bbox.width
+    width_px = width_inch * fig.dpi
+    show_every = max(1, int(np.ceil(len(x_labels) / max(2, width_px // min_tick_spacing_px))))
+    indices = [i for i in range(len(x_labels)) if i % show_every == 0]
+    labels = [x_labels[i] for i in indices]  # solo label che voglio
+    for ax in axs:
+        ax.set_xticks(indices)
+        ax.set_xticklabels(labels, rotation=45, ha='right')
+        ax.xaxis.set_tick_params(labelbottom=True)
 
+# --- MAIN SCRIPT ---
 data = {}
 tracks = {}
 cpuTrack = {}
@@ -124,11 +128,11 @@ argParser.add_argument('-lsl', '--logslow', required=False)
 argParser.add_argument('-phd', '--pheader', required=False)
 argParser.add_argument('-shl', '--showlost', required=False)
 argParser.add_argument('-sf', '--savefile', required=False)
-argParser.add_argument('--min_tick_spacing', required=False, type=int, default=50,
-    help="Spazio minimo in pixel tra le etichette dell'asse X (default 50)")
+argParser.add_argument('--min_tick_spacing', required=False, type=int, default=80,
+    help="Spazio minimo in pixel tra le etichette dell'asse X (default 80)")
 args = argParser.parse_args()
 
-min_tick_spacing = args.min_tick_spacing if hasattr(args, 'min_tick_spacing') else 100
+min_tick_spacing = args.min_tick_spacing if hasattr(args, 'min_tick_spacing') else 80
 
 if args.file is not None and args.file != "":
     filename = args.file
@@ -312,10 +316,20 @@ if lastTS is not None:
     cpuTrack = {k: v for k, v in cpuTrack.items() if (lastTS + 99 > v.sender_ts and v.sender_ts is not None)}
 print("Tracks found: " + str(len(tracks)))
 
+cnt_lost = sum(1 for d in data.values() if not d.isReceived() and not d.isTooOld() and not d.isTooSlow())
 cnt_old = sum(1 for d in data.values() if d.tooOld)
 cnt_slow = sum(1 for d in data.values() if d.tooSlow)
+print("Totale pacchetti LOST:", cnt_lost)
 print("Totale pacchetti TOO OLD:", cnt_old)
 print("Totale pacchetti TOO SLOW:", cnt_slow)
+
+# --- ASSE X COMUNE ---
+all_x_floats = sorted(set([
+    (elem.sender_ts - startTS) / 1000
+    for track in tracks.values() for elem in track.values() if elem.sender_ts is not None
+]))
+all_x_labels = [str(round(x, 3)) for x in all_x_floats]
+x_pos_map = {x: i for i, x in enumerate(all_x_floats)}
 
 additional_axs = 0
 if cpulog:
@@ -323,46 +337,59 @@ if cpulog:
 if wshfile:
     additional_axs += 1
 
+# --- PLOTTING ---
 if len(tracks) == 0:
     print("No tracks found, program will exit")
     exit()
 elif (len(tracks) == 1):
-    fig, axs = plt.subplots(2 + additional_axs, figsize=(12, 7), sharex=sharex)
+    # single track
+    n_plots = 2 + additional_axs
+    if showLost:
+        n_plots += 1
+    fig, axs = plt.subplots(n_plots, figsize=(16, 8), sharex=True)
     fig.suptitle('moq-js latency test', fontsize=20)
-
+    axs = np.atleast_1d(axs)
     maxRetransmissions = 0
     totalPackets = 0
     totalNotReceived = 0
     totalLatency = 0
     totalJitter = 0
     totalCPU = 0
-    startAxis = 0
-    if showLost:
-        additional_axs += 1
-        x_c, y_lost, y_tooold, y_tooslow = build_cumulatives(tracks, startTS, data)
-        axs[startAxis].step(x_c, y_lost, where='mid', color=COLORS["lost"], label='Lost')
-        axs[startAxis].step(x_c, y_tooold, where='mid', color=COLORS["too_old"], label='Too old')
-        axs[startAxis].step(x_c, y_tooslow, where='mid', color=COLORS["too_slow"], label='Too slow')
-        axs[startAxis].set_title("Cumulative anomaly packets")
-        axs[startAxis].set_ylabel('Cumulative\npackets', fontsize=12)
-        axs[startAxis].legend()
-        startAxis += 1
+    plotIdx = 0
 
-    axs[startAxis].set_title("All packets")
-    first_name = None
+    if showLost:
+        x_c, y_lost, y_tooold, y_tooslow = build_cumulatives(tracks, startTS, data)
+        x_c_idx = [x_pos_map[x] for x in x_c]
+        axs[plotIdx].step(x_c_idx, y_lost, where='mid', color=COLORS["lost"], label='Lost')
+        axs[plotIdx].step(x_c_idx, y_tooold, where='mid', color=COLORS["too_old"], label='Too old')
+        axs[plotIdx].step(x_c_idx, y_tooslow, where='mid', color=COLORS["too_slow"], label='Too slow')
+        axs[plotIdx].set_title("Cumulative anomaly packets")
+        axs[plotIdx].set_ylabel('Cumulative\npackets', fontsize=12)
+        axs[plotIdx].legend()
+        plotIdx += 1
+
+    # Latency
+    axs[plotIdx].set_title("All packets")
     for key in names:
         if key.isnumeric():
             first_name = names[key]
-            axs[startAxis].set_ylabel(first_name + ' latency\n(ms)', fontsize=12)
-            if (startAxis + 1) < len(axs):
-                axs[startAxis + 1].set_ylabel(first_name + ' jitter\n(ms)(tx)', fontsize=12)
+            axs[plotIdx].set_ylabel(first_name + ' latency\n(ms)', fontsize=12)
+            if (plotIdx + 1) < len(axs):
+                axs[plotIdx + 1].set_ylabel(first_name + ' jitter\n(ms)(tx)', fontsize=12)
 
     for index, key in enumerate(tracks):
+        latency_x = []
+        latency_y = []
+        latency_c = []
+        jitter_x = []
+        jitter_y = []
+        jitter_c = []
         for elem in tracks[key].values():
             totalPackets += 1
             if elem.sender_ts is None:
                 continue
-            # --- COLOR LOGIC: persi = rosso/arancione/blu ---
+            idx = x_pos_map[(elem.sender_ts - startTS) / 1000]
+            # Persi
             if elem.isReceived() == False:
                 if elem.isTooOld():
                     bar_color = COLORS["too_old"]
@@ -370,11 +397,7 @@ elif (len(tracks) == 1):
                     bar_color = COLORS["too_slow"]
                 else:
                     bar_color = COLORS["lost"]
-                axs[startAxis].bar(
-                    (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                    1,
-                    color=bar_color
-                )
+                axs[plotIdx].bar(idx, 1, color=bar_color)
                 totalNotReceived += 1
                 continue
             else:
@@ -386,77 +409,61 @@ elif (len(tracks) == 1):
                     bar_color = elem.color
                 else:
                     bar_color = (0.1, 0.1, 0.8, 1)
-                axs[startAxis].bar(
-                    (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                    elem.latency,
-                    color=bar_color
-                )
-                totalLatency += elem.latency
-                # Jitter SOLO SE IL SUBPLOT ESISTE
-                if (startAxis + 1) < len(axs):
+                latency_x.append(idx)
+                latency_y.append(elem.latency)
+                latency_c.append(bar_color)
+                # Jitter
+                if (plotIdx + 1) < len(axs):
                     if elem.sender_jitter is None:
                         elem.setSenderJitter(0)
-                    axs[startAxis + 1].bar(
-                        (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                        elem.sender_jitter,
-                        color=bar_color
-                    )
-                    if elem.sender_jitter > 100 and maxheight < 0:
-                        totalJitter += 100
-                    else:
-                        totalJitter += elem.sender_jitter
-                if wshfile:
-                    axs[-additional_axs].bar(
-                        (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                        elem.retransmissions,
-                        color=bar_color
-                    )
-                    if elem.retransmissions > maxRetransmissions:
-                        maxRetransmissions = elem.retransmissions
+                    jitter_x.append(idx)
+                    jitter_y.append(elem.sender_jitter)
+                    jitter_c.append(bar_color)
+        axs[plotIdx].bar(latency_x, latency_y, color=latency_c)
+        if (plotIdx + 1) < len(axs):
+            axs[plotIdx + 1].bar(jitter_x, jitter_y, color=jitter_c)
 
-    for elem in cpuTrack.values():
-        if cpulog and elem.sender_ts is not None:
-            axs[-1].bar(
-                (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                elem.value,
-                color=elem.color
-            )
-            totalCPU += elem.value
-
+    # Retransmission e cpu
     if wshfile:
         axs[-additional_axs].set_xlabel('Time in seconds', fontsize=12)
         axs[-additional_axs].set_ylabel('Number of retransmissions', fontsize=12)
-        if maxRetransmissions > 0:
-            axs[-additional_axs].set_yticks(np.arange(0, maxRetransmissions * 5 / 4, maxRetransmissions / 4))
     if cpulog:
         axs[-1].set_xlabel('Time in seconds', fontsize=12)
         axs[-1].set_ylabel('CPU usage\n(%)', fontsize=12)
-    if not cpulog and not wshfile: axs[1].set_xlabel('Time in seconds', fontsize=12)
-    for ax in (axs.flat if hasattr(axs, "flat") else axs):
-        set_dynamic_max_xticks(ax, fig, min_tick_spacing=min_tick_spacing)
 
+    set_all_xticks(axs, all_x_floats, all_x_labels, min_tick_spacing_px=min_tick_spacing)
+    axs[-1].set_xlabel("Time in seconds")
 else:
-    fig, axs = plt.subplots(len(tracks) * 2 + 1 + additional_axs, figsize=(14, 9), sharex=sharex)
+    # multi track
+    n_tracks = len(tracks)
+    n_plots = n_tracks * 2 + 1 + additional_axs
+    fig, axs = plt.subplots(n_plots, figsize=(18, 10), sharex=True)
     fig.suptitle('moq-js latency test', fontsize=20)
-
+    axs = np.atleast_1d(axs)
     maxRetransmissions = 0
-    totalLatency = 0
-    totalCPU = 0
     totalPackets = 0
     totalNotReceived = 0
 
+    plotIdx = 0
+
     if showLost:
         x_c, y_lost, y_tooold, y_tooslow = build_cumulatives(tracks, startTS, data)
-        axs[0].step(x_c, y_lost, where='mid', color=COLORS["lost"], label='Lost')
-        axs[0].step(x_c, y_tooold, where='mid', color=COLORS["too_old"], label='Too old')
-        axs[0].step(x_c, y_tooslow, where='mid', color=COLORS["too_slow"], label='Too slow')
+        x_c_idx = [x_pos_map[x] for x in x_c]
+        axs[0].step(x_c_idx, y_lost, where='mid', color=COLORS["lost"], label='Lost')
+        axs[0].step(x_c_idx, y_tooold, where='mid', color=COLORS["too_old"], label='Too old')
+        axs[0].step(x_c_idx, y_tooslow, where='mid', color=COLORS["too_slow"], label='Too slow')
         axs[0].set_ylabel('Cumulative\npackets', fontsize=12)
         axs[0].legend()
+        plotIdx += 1
     else:
         axs[0].set_title("All packets")
         axs[0].set_ylabel('Latency\n(ms)', fontsize=12)
+        latency_x = []
+        latency_y = []
+        latency_c = []
         for key, elem in data.items():
             if elem.sender_ts is not None:
+                idx = x_pos_map[(elem.sender_ts - startTS) / 1000]
                 if elem.isTooOld():
                     bar_color = COLORS["too_old"]
                 elif elem.isTooSlow():
@@ -465,27 +472,25 @@ else:
                     bar_color = elem.color
                 else:
                     bar_color = (0.1, 0.1, 0.8, 1)
-                axs[0].bar(
-                    (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                    elem.latency,
-                    color=bar_color
-                )
-                totalLatency += elem.latency
-        bottom, top = axs[0].get_ylim()
-        ylen = top - bottom
-        if maxheight > 0 and ylen > maxheight:
-            axs[0].set_ylim(0, maxheight)
-        if maxheight < 0:
-            axs[0].set_ylim(0, totalLatency * 1.9 / len(data))
+                latency_x.append(idx)
+                latency_y.append(elem.latency)
+                latency_c.append(bar_color)
+        axs[0].bar(latency_x, latency_y, color=latency_c)
+        plotIdx += 1
 
+    # Per ogni track: latency + jitter
     for index, key in enumerate(tracks):
-        totalLatency = 0
-        totalJitter = 0
+        latency_x = []
+        latency_y = []
+        latency_c = []
+        jitter_x = []
+        jitter_y = []
+        jitter_c = []
         for elem in tracks[key].values():
             totalPackets += 1
             if elem.sender_ts is None:
                 continue
-            # --- COLOR LOGIC: persi = rosso/arancione/blu ---
+            idx = x_pos_map[(elem.sender_ts - startTS) / 1000]
             if elem.isReceived() == False:
                 if elem.isTooOld():
                     bar_color = COLORS["too_old"]
@@ -493,11 +498,7 @@ else:
                     bar_color = COLORS["too_slow"]
                 else:
                     bar_color = COLORS["lost"]
-                axs[(index + 1) * 2 - 1].bar(
-                    (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                    1,
-                    color=bar_color
-                )
+                axs[plotIdx].bar(idx, 1, color=bar_color)
                 totalNotReceived += 1
                 continue
             else:
@@ -509,77 +510,35 @@ else:
                     bar_color = elem.color
                 else:
                     bar_color = (0.1, 0.1, 0.8, 1)
-                axs[(index + 1) * 2 - 1].bar(
-                    (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                    elem.latency,
-                    color=bar_color
-                )
-                totalLatency += elem.latency
+                latency_x.append(idx)
+                latency_y.append(elem.latency)
+                latency_c.append(bar_color)
                 if elem.sender_jitter is None:
                     elem.setSenderJitter(0)
-                axs[(index + 1) * 2].bar(
-                    (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                    elem.sender_jitter,
-                    color=bar_color
-                )
-                if elem.sender_jitter > 100 and maxheight < 0:
-                    totalJitter += 100
-                else:
-                    totalJitter += elem.sender_jitter
-                if wshfile:
-                    axs[-additional_axs].bar(
-                        (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                        elem.retransmissions,
-                        color=bar_color
-                    )
-                    if elem.retransmissions > maxRetransmissions:
-                        maxRetransmissions = elem.retransmissions
-
-        if not cpulog and not wshfile: axs[-1].set_xlabel('Time in seconds', fontsize=12)
-        axs[(index + 1) * 2 - 1].set_ylabel(names[key] + '\nlatency (ms)', fontsize=12)
-        axs[(index + 1) * 2].set_ylabel(names[key] + ' tx\njitter (ms)', fontsize=12)
-
-        bottom, top = axs[(index + 1) * 2 - 1].get_ylim()
-        ylen = top - bottom
-        if maxheight > 0 and ylen > maxheight:
-            axs[(index + 1) * 2 - 1].set_ylim(0, maxheight)
-        if maxheight < 0:
-            axs[(index + 1) * 2 - 1].set_ylim(0, totalLatency * 1.9 / len(tracks[key]))
-
-        bottom, top = axs[(index + 1) * 2].get_ylim()
-        ylen = top - bottom
-        if maxheight < 0 and (totalJitter * 1.9 / len(data)) > 10:
-            axs[(index + 1) * 2].set_ylim(0, totalJitter / len(tracks[key]))
-        else:
-            axs[(index + 1) * 2].set_ylim(0, 10)
-
-    for elem in cpuTrack.values():
-        if cpulog and elem.sender_ts is not None:
-            axs[-1].bar(
-                (elem.sender_ts - startTS) / 1000 if sharex else str((elem.sender_ts - startTS) / 1000),
-                elem.value,
-                color=elem.color
-            )
-            totalCPU += elem.value
+                jitter_x.append(idx)
+                jitter_y.append(elem.sender_jitter)
+                jitter_c.append(bar_color)
+        axs[plotIdx].bar(latency_x, latency_y, color=latency_c)
+        axs[plotIdx + 1].bar(jitter_x, jitter_y, color=jitter_c)
+        axs[plotIdx].set_ylabel(names[key] + '\nlatency (ms)', fontsize=12)
+        axs[plotIdx + 1].set_ylabel(names[key] + ' tx\njitter (ms)', fontsize=12)
+        plotIdx += 2
 
     if wshfile:
         axs[-additional_axs].set_xlabel('Time in seconds', fontsize=12)
         axs[-additional_axs].set_ylabel('Number of\nretransmissions', fontsize=12)
-        if maxRetransmissions > 0:
-            axs[-additional_axs].set_yticks(np.arange(0, maxRetransmissions * 5 / 4, maxRetransmissions / 4))
     if cpulog:
         axs[-1].set_xlabel('Time in seconds', fontsize=12)
         axs[-1].set_ylabel('CPU usage\n(%)', fontsize=12)
 
-    for ax in (axs.flat if hasattr(axs, "flat") else axs):
-        set_dynamic_max_xticks(ax, fig, min_tick_spacing=min_tick_spacing)
+    set_all_xticks(axs, all_x_floats, all_x_labels, min_tick_spacing_px=min_tick_spacing)
+    axs[-1].set_xlabel("Time in seconds")
 
 plt.subplots_adjust(left=0.07, right=0.975, hspace=0.85)
 print("Total packets:", totalPackets, "\nTotal not received packets:", totalNotReceived)
 
 def on_resize(event):
-    for ax in (axs.flat if hasattr(axs, "flat") else axs):
-        set_dynamic_max_xticks(ax, fig, min_tick_spacing=min_tick_spacing)
+    set_all_xticks(axs, all_x_floats, all_x_labels, min_tick_spacing_px=min_tick_spacing)
     fig.canvas.draw_idle()
 
 fig.canvas.mpl_connect('resize_event', on_resize)

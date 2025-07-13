@@ -106,33 +106,10 @@ def set_all_xticks(axs, x_positions, x_labels, min_tick_spacing_px=80):
         ax.set_xticklabels(labels, rotation=45, ha='right')
         ax.xaxis.set_tick_params(labelbottom=True)
 
-def set_y_limits(axs, tracks, maxheight):
-    """
-    Set Y-axis limits for latency and jitter plots according to the maxheight rules.
-    For 'auto', set latency limit to double the mean and jitter to one-tenth of that.
-    """
-    all_latencies = [elem.latency for track in tracks.values() for elem in track.values() if elem.isReceived() and elem.latency > 0]
-    if not all_latencies:
-        return
-    # Auto: set double the mean
-    if maxheight == -1:
-        latency_ylim = np.mean(all_latencies) * 3
-    else:
-        latency_ylim = maxheight
-    jitter_ylim = latency_ylim / 10
-    for ax in axs:
-        title = ax.get_title().lower()
-        label = ax.get_ylabel().lower()
-        if ('latency' in title) or ('latenza' in title) or ('latency' in label) or ('latenza' in label):
-            ax.set_ylim(top=latency_ylim)
-        elif ('jitter' in title) or ('jitter' in label):
-            ax.set_ylim(top=jitter_ylim)
-
 def simulated_latency_for_track(track, idx, all_indices, lost_height_mode):
     latencies = [e.latency for e in track.values() if e.isReceived() and e.latency > 0]
     jitters = [e.sender_jitter for e in track.values() if e.isReceived() and e.sender_jitter is not None]
     packets = list(track.values())
-    # Ordina le chiavi degli indici
     sorted_ix = sorted(all_indices)
     if lost_height_mode == 'max_plus_50':
         if len(latencies) == 0:
@@ -143,7 +120,6 @@ def simulated_latency_for_track(track, idx, all_indices, lost_height_mode):
         std_latency = np.std(latencies) if len(latencies) else 0
         return mean_jitter + 2*std_latency
     elif lost_height_mode == 'avg_neighbor':
-        # Trova la posizione nella sequenza ordinata
         sorted_packets = sorted([(i, e) for i, e in zip(all_indices, track.values())], key=lambda x: x[0])
         pos = None
         for i, (ix, elem) in enumerate(sorted_packets):
@@ -151,12 +127,10 @@ def simulated_latency_for_track(track, idx, all_indices, lost_height_mode):
                 pos = i
                 break
         prev_lat = next_lat = None
-        # Cerca il precedente ricevuto
         for j in range(pos-1, -1, -1):
             if sorted_packets[j][1].isReceived():
                 prev_lat = sorted_packets[j][1].latency
                 break
-        # Cerca il successivo ricevuto
         for j in range(pos+1, len(sorted_packets)):
             if sorted_packets[j][1].isReceived():
                 next_lat = sorted_packets[j][1].latency
@@ -167,7 +141,6 @@ def simulated_latency_for_track(track, idx, all_indices, lost_height_mode):
         if vals: return np.mean(vals)
         return np.mean(latencies) if len(latencies) else 1000
     elif lost_height_mode == 'last10_mean':
-        # Media degli ultimi 10 pacchetti ricevuti (rispetto a idx)
         sorted_packets = sorted([(i, e) for i, e in zip(all_indices, packets)], key=lambda x: x[0])
         pos = None
         for i, (ix, elem) in enumerate(sorted_packets):
@@ -184,7 +157,6 @@ def simulated_latency_for_track(track, idx, all_indices, lost_height_mode):
             return np.mean(received_latencies)
         return np.mean(latencies) if len(latencies) else 1000
     elif lost_height_mode == 'last5_mean':
-        # Media degli ultimi 5 pacchetti ricevuti (rispetto a idx)
         sorted_packets = sorted([(i, e) for i, e in zip(all_indices, packets)], key=lambda x: x[0])
         pos = None
         for i, (ix, elem) in enumerate(sorted_packets):
@@ -434,6 +406,28 @@ if cpulog:
 if wshfile:
     additional_axs += 1
 
+# --- Calcola limiti per ogni traccia ---
+latency_limits = {}
+jitter_limits = {}
+for track_id, track in tracks.items():
+    latencies = [elem.latency for elem in track.values() if elem.isReceived() and elem.latency > 0]
+    if latencies:
+        if maxheight == -1:
+            latency_ylim = np.mean(latencies) * 3
+        else:
+            latency_ylim = maxheight
+        jitter_ylim = latency_ylim / 10
+        if jitter_ylim > 20:
+            jitter_ylim = 20
+    else:
+        latency_ylim = 10
+        jitter_ylim = 2
+    latency_limits[track_id] = latency_ylim
+    jitter_limits[track_id] = jitter_ylim
+
+latency_ax_idx = {}
+jitter_ax_idx = {}
+
 # --- PLOTTING ---
 if len(tracks) == 0:
     print("No tracks found, program will exit")
@@ -523,6 +517,10 @@ elif (len(tracks) == 1):
         axs[plotIdx].bar(latency_x, latency_y, color=latency_c)
         if (plotIdx + 1) < len(axs):
             axs[plotIdx + 1].bar(jitter_x, jitter_y, color=jitter_c)
+        # Salva posizione asse per limiti dopo
+        latency_ax_idx[key] = plotIdx
+        if (plotIdx + 1) < len(axs):
+            jitter_ax_idx[key] = plotIdx + 1
 
     if wshfile:
         axs[-additional_axs].set_xlabel('Time in seconds', fontsize=12)
@@ -629,6 +627,9 @@ else:
         axs[plotIdx + 1].bar(jitter_x, jitter_y, color=jitter_c)
         axs[plotIdx].set_ylabel(names[key] + '\nlatency (ms)', fontsize=12)
         axs[plotIdx + 1].set_ylabel(names[key] + ' tx\njitter (ms)', fontsize=12)
+        # Salva posizione asse per limiti dopo
+        latency_ax_idx[key] = plotIdx
+        jitter_ax_idx[key] = plotIdx + 1
         plotIdx += 2
 
     if wshfile:
@@ -641,6 +642,13 @@ else:
     set_all_xticks(axs, all_x_floats, all_x_labels, min_tick_spacing_px=min_tick_spacing)
     axs[-1].set_xlabel("Time in seconds")
 
+# --- Applica limiti Y per traccia ---
+for key in tracks:
+    if key in latency_ax_idx:
+        axs[latency_ax_idx[key]].set_ylim(top=latency_limits[key])
+    if key in jitter_ax_idx:
+        axs[jitter_ax_idx[key]].set_ylim(top=jitter_limits[key])
+
 plt.subplots_adjust(left=0.07, right=0.975, hspace=0.85)
 print("Total packets:", totalPackets, "\nTotal not received packets:", totalNotReceived)
 
@@ -650,11 +658,8 @@ def on_resize(event):
 
 fig.canvas.mpl_connect('resize_event', on_resize)
 
-if (maxheight == -1) or (maxheight > 0):
-    set_y_limits(axs, tracks, maxheight)
-
 if hasattr(args, "file") and args.file and saveFile:
-    fig.set_size_inches(30, 14)
+    fig.set_size_inches(35, 20)
     base = os.path.basename(args.file).replace('.txt', '_cumuloss')
     plt.savefig(base + ".png")
     plt.savefig(base + ".svg")

@@ -203,6 +203,32 @@ args = argParser.parse_args()
 min_tick_spacing = args.min_tick_spacing if hasattr(args, 'min_tick_spacing') else 80
 lost_height_mode = args.lost_height
 
+# ----- SALVATAGGIO OUTPUT CONSOLE -----
+stdout_orig = sys.stdout
+
+class Tee:
+    def __init__(self, *files):
+        self.files = files
+    def write(self, obj):
+        for f in self.files:
+            try:
+                f.write(obj)
+            except Exception:
+                pass
+    def flush(self):
+        for f in self.files:
+            try:
+                f.flush()
+            except Exception:
+                pass
+
+# Determina se fare redirect output
+if hasattr(args, "file") and args.file and (args.savefile == 'true'):
+    base = os.path.basename(args.file).replace('.txt', '_cumuloss')
+    outfilename = base + ".out.txt"
+    out_file = open(outfilename, "w")
+    sys.stdout = Tee(stdout_orig, out_file)
+
 if args.file is not None and args.file != "":
     filename = args.file
     print("Opening moq-js log file", filename)
@@ -323,7 +349,7 @@ for row in f:
             if (audio_row == row[0] and int(audio_row) > 0) or (video_row == row[0] and int(video_row) < 0 and int(video_row) > 0): packetCount += 1
 
         elif(row[3] == 'too slow' and not skipping):
-            ts = int(row[4]) if len(row) > 4 and row[4].isnumeric() else (last_ts_by_track.get(track_id, None)+5)
+            ts = int(row[4]) if len(row) > 4 and row[4].isnumeric() else (last_ts_by_track.get(track_id, startTS)+5)
             if name not in data:
                 data[name] = rowData(name, sender_ts=ts, color=COLORS["too_slow"], tooSlow=True)
             else:
@@ -338,7 +364,7 @@ for row in f:
                 tracks[track_id][elem_id].setTooSlow(True)
 
         elif(row[3] == 'too old' and not skipping):
-            ts = int(row[4]) if len(row) > 4 and row[4].isnumeric() else (last_ts_by_track.get(track_id, None)+5)
+            ts = int(row[4]) if len(row) > 4 and row[4].isnumeric() else (last_ts_by_track.get(track_id, startTS)+5)
             if name not in data:
                 data[name] = rowData(name, sender_ts=ts, color=COLORS["too_old"], tooOld=True)
             else:
@@ -665,6 +691,9 @@ if hasattr(args, "file") and args.file and saveFile:
     plt.savefig(base + ".svg")
     plt.close()
     print("Saved:", base + ".png and .svg")
+    if 'out_file' in locals():
+        sys.stdout = stdout_orig  # Ripristina lo stdout vero
+        out_file.close()
     exit()
 else:
     plt.show()

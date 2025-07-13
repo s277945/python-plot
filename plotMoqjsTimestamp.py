@@ -106,6 +106,28 @@ def set_all_xticks(axs, x_positions, x_labels, min_tick_spacing_px=80):
         ax.set_xticklabels(labels, rotation=45, ha='right')
         ax.xaxis.set_tick_params(labelbottom=True)
 
+def set_y_limits(axs, tracks, maxheight):
+    """
+    Set Y-axis limits for latency and jitter plots according to the maxheight rules.
+    For 'auto', set latency limit to double the mean and jitter to one-tenth of that.
+    """
+    all_latencies = [elem.latency for track in tracks.values() for elem in track.values() if elem.isReceived() and elem.latency > 0]
+    if not all_latencies:
+        return
+    # Auto: set double the mean
+    if maxheight == -1:
+        latency_ylim = np.mean(all_latencies) * 3
+    else:
+        latency_ylim = maxheight
+    jitter_ylim = latency_ylim / 10
+    for ax in axs:
+        title = ax.get_title().lower()
+        label = ax.get_ylabel().lower()
+        if ('latency' in title) or ('latenza' in title) or ('latency' in label) or ('latenza' in label):
+            ax.set_ylim(top=latency_ylim)
+        elif ('jitter' in title) or ('jitter' in label):
+            ax.set_ylim(top=jitter_ylim)
+
 def simulated_latency_for_track(track, idx, all_indices, lost_height_mode):
     latencies = [e.latency for e in track.values() if e.isReceived() and e.latency > 0]
     jitters = [e.sender_jitter for e in track.values() if e.isReceived() and e.sender_jitter is not None]
@@ -627,6 +649,9 @@ def on_resize(event):
     fig.canvas.draw_idle()
 
 fig.canvas.mpl_connect('resize_event', on_resize)
+
+if (maxheight == -1) or (maxheight > 0):
+    set_y_limits(axs, tracks, maxheight)
 
 if hasattr(args, "file") and args.file and saveFile:
     fig.set_size_inches(30, 14)

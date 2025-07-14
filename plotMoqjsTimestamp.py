@@ -198,6 +198,8 @@ argParser.add_argument('-mts', '--min_tick_spacing', required=False, type=int, d
     help="Spazio minimo in pixel tra le etichette dell'asse X (default 80)")
 argParser.add_argument('-lsth', '--lost_height', choices=['1', 'infinite', 'max_plus_50', 'mean_jitter_plus_2std', 'avg_neighbor', 'last10_mean', 'last5_mean'],
     default='1', help="Come visualizzare i lost (1, infinite, max_plus_50, mean_jitter_plus_2std, avg_neighbor, last10_mean, last5_mean)")
+argParser.add_argument('-g', '--grid', required=False, type=str, default='false',
+    help="Show horizontal grid lines on latency/jitter plots (true/false, default true)")
 args = argParser.parse_args()
 
 min_tick_spacing = args.min_tick_spacing if hasattr(args, 'min_tick_spacing') else 80
@@ -287,6 +289,10 @@ if args.showlost == 'true': showLost = True
 
 saveFile = False
 if args.savefile == 'true': saveFile = True
+
+show_grid = False
+if args.grid == 'true' : show_grid = True
+
 
 audio_row = -1
 video_row = -1
@@ -674,6 +680,12 @@ for key in tracks:
         axs[latency_ax_idx[key]].set_ylim(top=latency_limits[key])
     if key in jitter_ax_idx:
         axs[jitter_ax_idx[key]].set_ylim(top=jitter_limits[key])
+
+# Add horizontal grid lines only to latency and jitter plots if enabled
+if show_grid:
+    lat_jit_indices = set(list(latency_ax_idx.values()) + list(jitter_ax_idx.values()))
+    for i in lat_jit_indices:
+        axs[i].grid(axis='y', linestyle='--', alpha=0.5)
 
 plt.subplots_adjust(left=0.07, right=0.975, hspace=0.85)
 print("Total packets:", totalPackets, "\nTotal not received packets:", totalNotReceived)

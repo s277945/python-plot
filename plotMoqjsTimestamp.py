@@ -172,6 +172,9 @@ def simulated_latency_for_track(track, idx, all_indices, lost_height_mode):
         if received_latencies:
             return np.mean(received_latencies)
         return np.mean(latencies) if len(latencies) else 1000
+    elif lost_height_mode == 'mean_x3':
+        mean_latency = np.mean(latencies) if len(latencies) else 1
+        return mean_latency * 3
     return 1000
 
 # --- MAIN SCRIPT ---
@@ -196,8 +199,8 @@ argParser.add_argument('-shl', '--showlost', required=False)
 argParser.add_argument('-sf', '--savefile', required=False)
 argParser.add_argument('-mts', '--min_tick_spacing', required=False, type=int, default=80,
     help="Spazio minimo in pixel tra le etichette dell'asse X (default 80)")
-argParser.add_argument('-lsth', '--lost_height', choices=['1', 'infinite', 'max_plus_50', 'mean_jitter_plus_2std', 'avg_neighbor', 'last10_mean', 'last5_mean'],
-    default='1', help="Come visualizzare i lost (1, infinite, max_plus_50, mean_jitter_plus_2std, avg_neighbor, last10_mean, last5_mean)")
+argParser.add_argument('-lsth', '--lost_height', choices=['1', 'infinite', 'max_plus_50', 'mean_jitter_plus_2std', 'avg_neighbor', 'last10_mean', 'last5_mean', 'mean_x3'],
+    default='1', help="Come visualizzare i lost (1, infinite, max_plus_50, mean_jitter_plus_2std, avg_neighbor, last10_mean, last5_mean, mean_x3)")
 argParser.add_argument('-g', '--grid', required=False, type=str, default='false',
     help="Show horizontal grid lines on latency/jitter plots (true/false, default true)")
 argParser.add_argument('--nojitter', required=False, type=str, default='false',
@@ -206,8 +209,6 @@ args = argParser.parse_args()
 
 min_tick_spacing = args.min_tick_spacing if hasattr(args, 'min_tick_spacing') else 80
 lost_height_mode = args.lost_height
-
-# New: variable for disabling jitter plots
 disable_jitter = (str(getattr(args, 'nojitter', 'false')).lower() == 'true')
 
 # ----- SALVATAGGIO OUTPUT CONSOLE -----
@@ -530,6 +531,9 @@ elif (len(tracks) == 1):
                     all_indices = [x_pos_map[(e.sender_ts - startTS) / 1000] for e in tracks[key].values() if e.sender_ts is not None]
                     height = simulated_latency_for_track(tracks[key], idx, all_indices, lost_height_mode)
                 axs[plotIdx].bar(idx, height, color=bar_color)
+                # Draw "x" if mean_x3 mode
+                if lost_height_mode == 'mean_x3':
+                    axs[plotIdx].plot(idx, height, marker='x', color=bar_color, markersize=5, markeredgewidth=1)
                 totalNotReceived += 1
                 continue
             else:
@@ -553,7 +557,6 @@ elif (len(tracks) == 1):
         axs[plotIdx].bar(latency_x, latency_y, color=latency_c)
         if not disable_jitter and (plotIdx + 1) < len(axs):
             axs[plotIdx + 1].bar(jitter_x, jitter_y, color=jitter_c)
-        # Salva posizione asse per limiti dopo
         latency_ax_idx[key] = plotIdx
         if not disable_jitter and (plotIdx + 1) < len(axs):
             jitter_ax_idx[key] = plotIdx + 1
@@ -640,6 +643,9 @@ else:
                     all_indices = [x_pos_map[(e.sender_ts - startTS) / 1000] for e in tracks[key].values() if e.sender_ts is not None]
                     height = simulated_latency_for_track(tracks[key], idx, all_indices, lost_height_mode)
                 axs[plotIdx].bar(idx, height, color=bar_color)
+                # Draw "x" if mean_x3 mode
+                if lost_height_mode == 'mean_x3':
+                    axs[plotIdx].plot(idx, height, marker='x', color=bar_color, markersize=5, markeredgewidth=1)
                 totalNotReceived += 1
                 continue
             else:

@@ -200,10 +200,15 @@ argParser.add_argument('-lsth', '--lost_height', choices=['1', 'infinite', 'max_
     default='1', help="Come visualizzare i lost (1, infinite, max_plus_50, mean_jitter_plus_2std, avg_neighbor, last10_mean, last5_mean)")
 argParser.add_argument('-g', '--grid', required=False, type=str, default='false',
     help="Show horizontal grid lines on latency/jitter plots (true/false, default true)")
+argParser.add_argument('--nojitter', required=False, type=str, default='false',
+    help="Disable jitter plots (true/false, default false)")
 args = argParser.parse_args()
 
 min_tick_spacing = args.min_tick_spacing if hasattr(args, 'min_tick_spacing') else 80
 lost_height_mode = args.lost_height
+
+# New: variable for disabling jitter plots
+disable_jitter = (str(getattr(args, 'nojitter', 'false')).lower() == 'true')
 
 # ----- SALVATAGGIO OUTPUT CONSOLE -----
 stdout_orig = sys.stdout
@@ -292,7 +297,6 @@ if args.savefile == 'true': saveFile = True
 
 show_grid = False
 if args.grid == 'true' : show_grid = True
-
 
 audio_row = -1
 video_row = -1
@@ -465,7 +469,7 @@ if len(tracks) == 0:
     print("No tracks found, program will exit")
     exit()
 elif (len(tracks) == 1):
-    n_plots = 2 + additional_axs
+    n_plots = (1 if disable_jitter else 2) + additional_axs
     if showLost:
         n_plots += 1
     fig, axs = plt.subplots(n_plots, figsize=(16, 8), sharex=True)
@@ -493,7 +497,7 @@ elif (len(tracks) == 1):
         if key.isnumeric():
             first_name = names[key]
             axs[plotIdx].set_ylabel(first_name + ' latency\n(ms)', fontsize=12)
-            if (plotIdx + 1) < len(axs):
+            if not disable_jitter and (plotIdx + 1) < len(axs):
                 axs[plotIdx + 1].set_ylabel(first_name + ' jitter\n(ms)(tx)', fontsize=12)
 
     for index, key in enumerate(tracks):
@@ -540,18 +544,18 @@ elif (len(tracks) == 1):
                 latency_x.append(idx)
                 latency_y.append(elem.latency)
                 latency_c.append(bar_color)
-                if (plotIdx + 1) < len(axs):
+                if not disable_jitter and (plotIdx + 1) < len(axs):
                     if elem.sender_jitter is None:
                         elem.setSenderJitter(0)
                     jitter_x.append(idx)
                     jitter_y.append(elem.sender_jitter)
                     jitter_c.append(bar_color)
         axs[plotIdx].bar(latency_x, latency_y, color=latency_c)
-        if (plotIdx + 1) < len(axs):
+        if not disable_jitter and (plotIdx + 1) < len(axs):
             axs[plotIdx + 1].bar(jitter_x, jitter_y, color=jitter_c)
         # Salva posizione asse per limiti dopo
         latency_ax_idx[key] = plotIdx
-        if (plotIdx + 1) < len(axs):
+        if not disable_jitter and (plotIdx + 1) < len(axs):
             jitter_ax_idx[key] = plotIdx + 1
 
     if wshfile:
@@ -565,7 +569,7 @@ elif (len(tracks) == 1):
     axs[-1].set_xlabel("Time in seconds")
 else:
     n_tracks = len(tracks)
-    n_plots = n_tracks * 2 + 1 + additional_axs
+    n_plots = n_tracks * (1 if disable_jitter else 2) + 1 + additional_axs
     fig, axs = plt.subplots(n_plots, figsize=(18, 10), sharex=True)
     fig.suptitle('moq-js latency test', fontsize=20)
     axs = np.atleast_1d(axs)
@@ -650,19 +654,23 @@ else:
                 latency_x.append(idx)
                 latency_y.append(elem.latency)
                 latency_c.append(bar_color)
-                if elem.sender_jitter is None:
-                    elem.setSenderJitter(0)
-                jitter_x.append(idx)
-                jitter_y.append(elem.sender_jitter)
-                jitter_c.append(bar_color)
+                if not disable_jitter:
+                    if elem.sender_jitter is None:
+                        elem.setSenderJitter(0)
+                    jitter_x.append(idx)
+                    jitter_y.append(elem.sender_jitter)
+                    jitter_c.append(bar_color)
         axs[plotIdx].bar(latency_x, latency_y, color=latency_c)
-        axs[plotIdx + 1].bar(jitter_x, jitter_y, color=jitter_c)
-        axs[plotIdx].set_ylabel(names[key] + '\nlatency (ms)', fontsize=12)
-        axs[plotIdx + 1].set_ylabel(names[key] + ' tx\njitter (ms)', fontsize=12)
-        # Salva posizione asse per limiti dopo
         latency_ax_idx[key] = plotIdx
-        jitter_ax_idx[key] = plotIdx + 1
-        plotIdx += 2
+        if not disable_jitter:
+            axs[plotIdx + 1].bar(jitter_x, jitter_y, color=jitter_c)
+            axs[plotIdx].set_ylabel(names[key] + '\nlatency (ms)', fontsize=12)
+            axs[plotIdx + 1].set_ylabel(names[key] + ' tx\njitter (ms)', fontsize=12)
+            jitter_ax_idx[key] = plotIdx + 1
+            plotIdx += 2
+        else:
+            axs[plotIdx].set_ylabel(names[key] + '\nlatency (ms)', fontsize=12)
+            plotIdx += 1
 
     if wshfile:
         axs[-additional_axs].set_xlabel('Time in seconds', fontsize=12)
